@@ -278,7 +278,7 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
   <div class="panel">
    <h2>Meu Perfil de Duelista</h2>
    <div id="profileArea">
-    <p class="muted">Carregando dados do perfil...</p>
+    <p class="muted">Entre na sua conta para gerenciar seu perfil.</p>
    </div>
   </div>
   <div class="panel">
@@ -792,20 +792,23 @@ function renderProfile(){
   <p class="noticebar">Cargo: ${esc(profile?.role||"player")}</p>
  `;
 
- $("profileForm").onsubmit=async e=>{
-  e.preventDefault();
-  const f=new FormData(e.target);
-  const newName=String(f.get("display_name")||"").trim();
-  const avatarUrl=String(f.get("avatar_url")||"").trim();
-  const selectedTitle=String(f.get("selected_title")||"").trim();
-  if(!newName)return msg("Digite um nome de duelista.","error");
-  const alreadyUsed=players.some(p=>p.id!==session.user.id&&String(p.display_name||"").trim().toLocaleLowerCase("pt-BR")===newName.toLocaleLowerCase("pt-BR"));
-  if(alreadyUsed)return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
-  const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,selected_title:selectedTitle}).eq("id",session.user.id);
-  if(error)return msg(error.message,"error");
-  msg("Perfil atualizado com sucesso!","success");
-  await loadData();
- };
+ const pForm = $("profileForm");
+ if(pForm) {
+  pForm.onsubmit=async e=>{
+   e.preventDefault();
+   const f=new FormData(e.target);
+   const newName=String(f.get("display_name")||"").trim();
+   const avatarUrl=String(f.get("avatar_url")||"").trim();
+   const selectedTitle=String(f.get("selected_title")||"").trim();
+   if(!newName)return msg("Digite um nome de duelista.","error");
+   const alreadyUsed=players.some(p=>p.id!==session.user.id&&String(p.display_name||"").trim().toLocaleLowerCase("pt-BR")===newName.toLocaleLowerCase("pt-BR"));
+   if(alreadyUsed)return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
+   const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,selected_title:selectedTitle}).eq("id",session.user.id);
+   if(error)return msg(error.message,"error");
+   msg("Perfil atualizado com sucesso!","success");
+   await loadData();
+  };
+ }
 
  renderDecks();
 }
@@ -858,31 +861,34 @@ function renderAdmin(){
  const pending=matches.filter(m=>["pending_admin","pending_opponent"].includes(m.status));
  $("adminArea").innerHTML=`<h3>Duelos pendentes (${pending.length})</h3><div class="stack">${pending.map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo pendente.")}</div>`;
 
- $("seasonForm").onsubmit = async e => {
-  e.preventDefault();
-  if(!confirm("Tem certeza que deseja encerrar a temporada atual? O líder atual será coroado no Hall da Fama.")) return;
-  const f = new FormData(e.target);
-  const seasonName = f.get("season_name");
+ const sForm = $("seasonForm");
+ if(sForm) {
+  sForm.onsubmit = async e => {
+   e.preventDefault();
+   if(!confirm("Tem certeza que deseja encerrar a temporada atual? O líder atual será coroado no Hall da Fama.")) return;
+   const f = new FormData(e.target);
+   const seasonName = f.get("season_name");
 
-  const ranked = players.map(p => {
-   const compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive' && (m.player1_id === p.id || m.player2_id === p.id));
-   const wins = compMatches.filter(m => m.winner_id === p.id).length;
-   return { ...p, wins, points: wins * 3 };
-  }).sort((a,b)=>b.points-a.points||b.wins-a.wins);
+   const ranked = players.map(p => {
+    const compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive' && (m.player1_id === p.id || m.player2_id === p.id));
+    const wins = compMatches.filter(m => m.winner_id === p.id).length;
+    return { ...p, wins, points: wins * 3 };
+   }).sort((a,b)=>b.points-a.points||b.wins-a.wins);
 
-  const champion = ranked[0];
-  if(!champion) return msg("Não há jogadores no ranking para encerrar a temporada.","error");
+   const champion = ranked[0];
+   if(!champion) return msg("Não há jogadores no ranking para encerrar a temporada.","error");
 
-  const {error} = await sb.from("seasons_history").insert({
-   season_name: seasonName,
-   champion_name: champion.display_name,
-   champion_deck: champion.deck_name || "Não informado"
-  });
+   const {error} = await sb.from("seasons_history").insert({
+    season_name: seasonName,
+    champion_name: champion.display_name,
+    champion_deck: champion.deck_name || "Não informado"
+   });
 
-  if(error) return msg("Erro ao salvar temporada: " + error.message, "error");
-  msg(`Temporada "${seasonName}" encerrada com sucesso! Campeão: ${champion.display_name}`, "success");
-  await loadData();
- };
+   if(error) return msg("Erro ao salvar temporada: " + error.message, "error");
+   msg(`Temporada "${seasonName}" encerrada com sucesso! Campeão: ${champion.display_name}`, "success");
+   await loadData();
+  };
+ }
 }
 
 function initRealtime(){
@@ -924,6 +930,8 @@ async function loadData(){
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+ renderProfile();
+
  const tForm = $("tradeForm");
  if(tForm) {
   tForm.onsubmit = async e => {
