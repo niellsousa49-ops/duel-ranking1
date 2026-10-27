@@ -11,7 +11,6 @@
 :root{--bg:#030408;--panel:#080c18;--panel2:#0d1326;--line:#1a274a;--text:#f8fafc;--muted:#899bb5;--gold:#facc15;--gold-glow:rgba(250,204,21,0.35);--blue:#2563eb;--green:#059669;--red:#dc2626}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% 0%,#111c38 0,#030408 75%);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
 
-/* ANIMAÇÕES E EFEITOS 3D DE DUELO */
 @keyframes fadeInZoom {
     from { opacity: 0; transform: scale(0.97); }
     to { opacity: 1; transform: scale(1); }
@@ -51,7 +50,6 @@ main{max-width:1150px;margin:0 auto;padding:28px 20px 60px}
 .hero-card,.panel,.stat{border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,#0a0f20f5,#050711f5);box-shadow:0 20px 50px #000e;position:relative;animation:fadeInZoom 0.4s ease-out forwards;transition:all 0.25s ease}
 .hero-card:hover,.panel:hover{border-color:rgba(250,204,21,0.5);box-shadow:0 0 30px rgba(250,204,21,0.2)}
 
-/* Estilo Imersivo Holo-Card */
 .hero-card{padding:28px;overflow:hidden;border:2px solid #ca8a04;background:linear-gradient(135deg,#0e152e 0%,#060914 100%);box-shadow:inset 0 0 40px rgba(250,204,21,0.08), 0 20px 50px #000e}
 .hero-card:after{content:"👁️";position:absolute;font-size:140px;right:-15px;bottom:-35px;opacity:0.05;pointer-events:none}
 .eyebrow{color:var(--gold);text-transform:uppercase;letter-spacing:2.5px;font-size:11px;font-weight:900;text-shadow:0 0 12px var(--gold-glow)}
@@ -85,7 +83,6 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
 .player{display:flex;align-items:center;gap:9px;cursor:pointer}
 .player:hover strong{color:var(--gold);text-decoration:underline}
 
-/* Moldura Rara nas Miniaturas */
 .avatar{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;background:#151f38;color:var(--gold);font-weight:900;border:2px solid var(--gold);background-size:cover;background-position:center;flex-shrink:0;box-shadow:0 0 12px var(--gold-glow)}
 .deck-art-thumb{width:28px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-left:6px;border:2px solid var(--gold);box-shadow:0 0 10px var(--gold-glow)}
 
@@ -278,7 +275,12 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
   <div id="hallFameList" class="stack" style="margin-top:16px"></div>
  </section>
  <section id="view-perfil" class="grid hidden">
-  <div class="panel"><h2>Meu Perfil de Duelista</h2><div id="profileArea"></div></div>
+  <div class="panel">
+   <h2>Meu Perfil de Duelista</h2>
+   <div id="profileArea">
+    <p class="muted">Carregando dados do perfil...</p>
+   </div>
+  </div>
   <div class="panel">
    <h2>🃏 Meus Decks</h2>
    <p class="muted" style="font-size:13px">Cadastre vários decks e selecione qual está <strong>Ativo</strong> para aparecer no ranking e duelos.</p>
@@ -327,7 +329,6 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const msg=(text,type="")=>{$("globalMsg").innerHTML=text?`<div class="notice ${type}">${esc(text)}</div>`:"";};
 const isAdmin=()=>profile&&["admin","moderator"].includes(profile.role);
 
-// Auxiliar de Mesa com Animações 3D
 window.rollDiceAnim = function() {
  const icon = $("diceVisual");
  const text = $("diceResultText");
@@ -357,7 +358,6 @@ window.flipCoinAnim = function() {
  }, 700);
 };
 
-// Calculadora de LP
 let lpValues = { A: 8000, B: 8000 };
 window.modLP = function(player, amount) {
  if(amount === 'half') lpValues[player] = Math.floor(lpValues[player] / 2);
@@ -763,8 +763,11 @@ function renderMatches(){
 }
 
 function renderProfile(){
+ const profileArea = $("profileArea");
+ if(!profileArea) return;
+
  if(!session){
-  $("profileArea").innerHTML=`<p class="muted">Entre ou crie uma conta para configurar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;
+  profileArea.innerHTML=`<p class="muted">Entre ou crie uma conta para configurar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;
   $("myDecksList").innerHTML=empty("Conecte a sua conta para ver os teus decks.");
   return;
  }
@@ -775,7 +778,7 @@ function renderProfile(){
   ? myData.titles.map(t=>`<option value="${esc(t)}" ${profile?.selected_title===t?"selected":""}>${esc(t)}</option>`).join("") 
   : `<option value="">Nenhum título desbloqueado ainda</option>`;
 
- $("profileArea").innerHTML=`
+ profileArea.innerHTML=`
   <div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div>
   <form id="profileForm">
    <label>Nome de duelista</label>
@@ -920,7 +923,6 @@ async function loadData(){
  initRealtime();
 }
 
-// Lógica de Submissão de Trocas e Cadastro de Decks
 document.addEventListener("DOMContentLoaded", () => {
  const tForm = $("tradeForm");
  if(tForm) {
