@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Duel Ranking — Yu-Gi-Oh!</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#030408">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -334,7 +336,7 @@ let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], u
 const cardArtCache = {};
 const CARD_BACK_URL = 'https://images.ygoprodeck.com/images/card_back.jpg';
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const msg=(text,type="")=>{$("globalMsg").innerHTML=text?`<div class="notice ${type}">${esc(text)}</div>`:"";};
 const isAdmin=()=>profile&&["admin","moderator"].includes(profile.role);
 
@@ -1072,6 +1074,14 @@ $("loginBtn").onclick=()=>window.openAuth();$("logoutBtn").onclick=async()=>{awa
 if(!configured){msg("Modo de configuração: conecte as credenciais do Supabase para ativar o ranking online.","error")}
 if(configured)sb.auth.onAuthStateChange(()=>setTimeout(loadData,0));
 loadData();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log("Service Worker registrado com sucesso!"))
+      .catch((err) => console.log("Erro ao registrar Service Worker: ", err));
+  });
+}
 </script>
 </body>
 </html>
