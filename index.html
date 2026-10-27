@@ -135,6 +135,9 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
 .lp-box{background:#040710;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
 .lp-display{font-size:36px;font-weight:900;color:var(--gold);margin:6px 0;font-variant-numeric:tabular-nums;text-shadow:0 0 15px var(--gold-glow)}
 
+.deck-card-item{background:#0b1124;border:1px solid var(--line);padding:10px 14px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.deck-card-item.active-deck{border-color:var(--gold);background:linear-gradient(135deg,#0d152b 0%,#182347 100%);box-shadow:0 0 12px rgba(250,204,21,0.15)}
+
 @media(max-width:800px){.hero,.grid{grid-template-columns:1fr}.hero-card{padding:23px}.hero-side{padding:18px}.top{padding:12px 14px}main{padding:20px 13px 40px}.top-actions .hide-mobile{display:none}.panel{padding:15px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
 </head>
@@ -287,7 +290,20 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  </section>
  <section id="view-perfil" class="grid hidden">
   <div class="panel"><h2>Meu Perfil de Duelista</h2><div id="profileArea"></div></div>
-  <div class="panel"><h2>Meus Duelos</h2><div id="myMatches" class="stack"></div></div>
+  <div class="panel">
+   <h2>🃏 Meus Decks</h2>
+   <p class="muted" style="font-size:13px">Cadastre vários decks e selecione qual está <strong>Ativo</strong> para aparecer no ranking e duelos.</p>
+   <div id="myDecksList" style="margin-top:12px"></div>
+   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+   <h3 style="margin-top:0">➕ Adicionar Novo Deck</h3>
+   <form id="addDeckForm">
+    <label>Nome do Deck / Arquétipo</label>
+    <input name="deck_name" required placeholder="Ex: HERO, Branded, Labrynth">
+    <label>Carta em Destaque (Nome em inglês para a arte)</label>
+    <input name="deck_card" placeholder="Ex: Elemental HERO Neos">
+    <button class="primary" style="margin-top:12px;width:100%">Cadastrar Deck</button>
+   </form>
+  </div>
  </section>
  <section id="view-admin" class="hidden">
   <div class="panel">
@@ -314,11 +330,11 @@ const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_gGApyS1mejqARPMchPI1NA_3GgIp7X_";
 const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("COLE_AQUI") && SUPABASE_ANON_KEY.length > 30 && !SUPABASE_ANON_KEY.includes("COLE_AQUI");
 const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], activeTab="ranking", rankingMode="competitive", adminMode=false, realtimeSub=null;
+let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", adminMode=false, realtimeSub=null;
 const cardArtCache = {};
 const CARD_BACK_URL = 'https://images.ygoprodeck.com/images/card_back.jpg';
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);
 const msg=(text,type="")=>{$("globalMsg").innerHTML=text?`<div class="notice ${type}">${esc(text)}</div>`:"";};
 const isAdmin=()=>profile&&["admin","moderator"].includes(profile.role);
 
@@ -500,46 +516,6 @@ function getPlayerUnlockedData(pId, isLeader=false){
  const fastMatch = matches.some(m => m.status === "approved" && (m.player1_id === pId || m.player2_id === pId) && m.duration_minutes && m.duration_minutes <= 15);
  if(fastMatch) achievements.push("⚡ Speed Duel (Vitória em ≤15m)");
 
- const archetypeWins = {};
- for(let m of matches.filter(m=>m.status==="approved" && m.winner_id===pId)){
-  let oppDeck = "";
-  if(m.player1_id === pId) oppDeck = m.p2_deck || deckName(m.player2_id);
-  else oppDeck = m.p1_deck || deckName(m.player1_id);
-  
-  const norm = oppDeck.toLowerCase();
-  if(!archetypeWins[norm]) archetypeWins[norm] = 0;
-  archetypeWins[norm]++;
- }
-
- for(let d in archetypeWins){
-  const count = archetypeWins[d];
-  let tier = 0;
-  if(count >= 100) tier = 100;
-  else if(count >= 40) tier = 40;
-  else if(count >= 20) tier = 20;
-  else if(count >= 10) tier = 10;
-  else if(count >= 5) tier = 5;
-
-  if(tier > 0){
-   if(d.includes("blue") || d.includes("eyes")){
-    const tMap = {5:"🐉 Domador de Lagarto (5v)", 10:"🐉 Rasgador de Cartas (10v)", 20:"🐉 O Verdadeiro Rei (20v)", 40:"🐉 Pesadelo do Kaiba (40v)", 100:"🐉 Destruidor do Dragão Branco (100v)"};
-    titles.push(tMap[tier]);
-   } else if(d.includes("hero")){
-    const tMap = {5:"🦸 Recruta Anti-Herói (5v)", 10:"🦸 Cortador Polimerização (10v)", 20:"🦸 Caçador de Mascarados (20v)", 40:"🦸 Destruidor de Heróis (40v)", 100:"🦸 O Fim de Jaden Yuki (100v)"};
-    titles.push(tMap[tier]);
-   } else if(d.includes("sky") || d.includes("striker")){
-    const tMap = {5:"✈️ Derrubador de Drones (5v)", 10:"✈️ Proibidor de Engage (10v)", 20:"✈️ Exterminador de Raye (20v)", 40:"✈️ Zona Anti-Aérea Total (40v)", 100:"✈️ Pesadelo das Armaduras (100v)"};
-    titles.push(tMap[tier]);
-   } else if(d.includes("red") || d.includes("dragon")){
-    const tMap = {5:"👑 Motor Desligado (5v)", 10:"👑 Rebaixado de Classe (10v)", 20:"👑 Destronador de Jack (20v)", 40:"👑 Novo Dono do Trono (40v)", 100:"👑 Deus da Pista Zero Velocidade (100v)"};
-    titles.push(tMap[tier]);
-   } else if(d.includes("forest") || d.includes("white")){
-    const tMap = {5:"🌲 Guarda Florestal (5v)", 10:"🌲 Incendiário da Mata (10v)", 20:"🌲 Desmatador Profissional (20v)", 40:"🌲 Pesadelo da Floresta Branca (40v)", 100:"🌲 Extintor de Fadas (100v)"};
-    titles.push(tMap[tier]);
-   }
-  }
- }
-
  return {streak, recent, count: approved.length, titles, achievements};
 }
 
@@ -690,7 +666,7 @@ window.openPlayerCard = function(pId) {
     <div>
      <h3 style="margin:0;font-size:18px">${esc(targetPlayer.display_name)}</h3>
      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
-      <span class="muted" style="font-size:13px">Deck: ${esc(targetPlayer.deck_name || "Não informado")}</span>
+      <span class="muted" style="font-size:13px">Deck Ativo: ${esc(targetPlayer.deck_name || "Não informado")}</span>
       <img id="modal-deckart-${targetPlayer.id}" class="deck-art-thumb" style="display:none" alt="Deck Art">
      </div>
     </div>
@@ -749,7 +725,7 @@ function renderRanking(){
   };
  });
 
- $("rankingTable").innerHTML = ranked.length ? `<div class="tablewrap"><table><thead><tr><th>#</th><th>Duelista / Avatar</th><th>Deck / Arquétipo</th><th>Forma</th><th>${rankingMode==='casual'?'Pts (1v)':'Pts (3v)'}</th><th>V</th><th>D</th><th>Duelos</th></tr></thead><tbody>${ranked.map((p,i)=>{
+ $("rankingTable").innerHTML = ranked.length ? `<div class="tablewrap"><table><thead><tr><th>#</th><th>Duelista / Avatar</th><th>Deck Ativo</th><th>Forma</th><th>${rankingMode==='casual'?'Pts (1v)':'Pts (3v)'}</th><th>V</th><th>D</th><th>Duelos</th></tr></thead><tbody>${ranked.map((p,i)=>{
   const avatarImg = p.avatar_url ? p.avatar_url : CARD_BACK_URL;
   const avatarStyle = `background-image: url('${avatarImg}')`;
   
@@ -826,7 +802,11 @@ function renderMatches(){
 }
 
 function renderProfile(){
- if(!session){$("profileArea").innerHTML=`<p class="muted">Entre ou crie uma conta para configurar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;return}
+ if(!session){
+  $("profileArea").innerHTML=`<p class="muted">Entre ou crie uma conta para configurar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;
+  $("myDecksList").innerHTML=empty("Conecte a sua conta para ver os teus decks.");
+  return;
+ }
  
  const isUserLeader = (players.sort((a,b)=>b.points-a.points||b.wins-a.wins)[0]?.id === session.user.id);
  const myData = getPlayerUnlockedData(session.user.id, isUserLeader);
@@ -834,25 +814,80 @@ function renderProfile(){
   ? myData.titles.map(t=>`<option value="${esc(t)}" ${profile?.selected_title===t?"selected":""}>${esc(t)}</option>`).join("") 
   : `<option value="">Nenhum título desbloqueado ainda</option>`;
 
- $("profileArea").innerHTML=`<div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div><form id="profileForm"><label>Nome de duelista</label><input name="display_name" maxlength="30" required value="${esc(profile?.display_name||"")}"><label>Link da Imagem do Avatar (URL da internet)</label><input name="avatar_url" type="url" placeholder="https://exemplo.com/avatar.png" value="${esc(profile?.avatar_url||"")}"><label>Deck principal / Arquétipo</label><input name="deck_name" maxlength="60" placeholder="Ex: HERO, Branded" value="${esc(profile?.deck_name||"")}"><label>Carta em Destaque do Deck (Nome exato da carta em inglês para a miniatura)</label><input name="deck_card" maxlength="60" placeholder="Ex: Elemental HERO Neos" value="${esc(profile?.deck_card||"")}"><label>⭐ Equipar Título Principal</label><select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select><button class="primary" style="margin-top:14px">Salvar Perfil</button></form><p class="noticebar">Cargo: ${esc(profile?.role||"player")}</p>`;
+ $("profileArea").innerHTML=`
+  <div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div>
+  <form id="profileForm">
+   <label>Nome de duelista</label>
+   <input name="display_name" maxlength="30" required value="${esc(profile?.display_name||"")}">
+   <label>Link da Imagem do Avatar (URL da internet)</label>
+   <input name="avatar_url" type="url" placeholder="https://exemplo.com/avatar.png" value="${esc(profile?.avatar_url||"")}">
+   <label>⭐ Equipar Título Principal</label>
+   <select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select>
+   <button class="primary" style="margin-top:14px">Salvar Perfil</button>
+  </form>
+  <p class="noticebar">Cargo: ${esc(profile?.role||"player")}</p>
+ `;
 
  $("profileForm").onsubmit=async e=>{
   e.preventDefault();
   const f=new FormData(e.target);
   const newName=String(f.get("display_name")||"").trim();
   const avatarUrl=String(f.get("avatar_url")||"").trim();
-  const newDeck=String(f.get("deck_name")||"").trim();
-  const deckCard=String(f.get("deck_card")||"").trim();
   const selectedTitle=String(f.get("selected_title")||"").trim();
   if(!newName)return msg("Digite um nome de duelista.","error");
   const alreadyUsed=players.some(p=>p.id!==session.user.id&&String(p.display_name||"").trim().toLocaleLowerCase("pt-BR")===newName.toLocaleLowerCase("pt-BR"));
   if(alreadyUsed)return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
-  const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,deck_name:newDeck,deck_card:deckCard,selected_title:selectedTitle}).eq("id",session.user.id);
+  const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,selected_title:selectedTitle}).eq("id",session.user.id);
   if(error)return msg(error.message,"error");
   msg("Perfil atualizado com sucesso!","success");
   await loadData();
  };
+
+ renderDecks();
 }
+
+function renderDecks() {
+ const list = $("myDecksList");
+ if (!list) return;
+ if (!userDecks.length) {
+  list.innerHTML = empty("Você ainda não tem decks cadastrados. Cadastre seu primeiro deck abaixo!");
+  return;
+ }
+
+ list.innerHTML = userDecks.map(d => `
+  <div class="deck-card-item ${d.is_active ? 'active-deck' : ''}">
+   <div>
+    <strong style="color:${d.is_active ? 'var(--gold)' : 'var(--text)'}">${esc(d.deck_name)}</strong>
+    ${d.deck_card ? `<small class="muted" style="display:block">Destaque: ${esc(d.deck_card)}</small>` : ''}
+   </div>
+   <div style="display:flex;gap:6px;align-items:center">
+    ${d.is_active 
+      ? `<span class="pill ok">⭐ Ativo</span>` 
+      : `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="setActiveDeck('${d.id}', '${esc(d.deck_name)}', '${esc(d.deck_card||'')}')">Ativar</button>`}
+    <button class="danger" style="padding:4px 8px;font-size:11px" onclick="deleteDeck('${d.id}')">🗑️</button>
+   </div>
+  </div>
+ `).join("");
+}
+
+window.setActiveDeck = async function(deckId, dName, dCard) {
+ if (!session) return;
+ await sb.from("player_decks").update({ is_active: false }).eq("user_id", session.user.id);
+ const { error } = await sb.from("player_decks").update({ is_active: true }).eq("id", deckId);
+ if (error) return msg("Erro ao ativar deck: " + error.message, "error");
+ 
+ await sb.from("profiles").update({ deck_name: dName, deck_card: dCard }).eq("id", session.user.id);
+ msg(`Deck "${dName}" definido como ativo!`, "success");
+ await loadData();
+};
+
+window.deleteDeck = async function(deckId) {
+ if (!confirm("Tem certeza que deseja apagar este deck?")) return;
+ const { error } = await sb.from("player_decks").delete().eq("id", deckId);
+ if (error) return msg("Erro ao apagar deck: " + error.message, "error");
+ msg("Deck apagado com sucesso.", "success");
+ await loadData();
+};
 
 function renderAdmin(){
  if(!isAdmin()){$("adminArea").innerHTML=empty("Acesso restrito a administradores.");return}
@@ -892,6 +927,7 @@ function initRealtime(){
   .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, () => { loadData(); })
   .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => { loadData(); })
   .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => { loadData(); })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'player_decks' }, () => { loadData(); })
   .subscribe();
 }
 
@@ -900,7 +936,13 @@ async function loadData(){
  const {data:auth}=await sb.auth.getSession();session=auth.session;
  $("loginBtn").classList.toggle("hidden",!!session);$("logoutBtn").classList.toggle("hidden",!session);$("userLabel").textContent=session?(session.user.email||"Conectado"):"Visitante";
  profile=null;
- if(session){let {data:p}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();profile=p}
+ userDecks=[];
+ if(session){
+  let {data:p}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();
+  profile=p;
+  let {data:d}=await sb.from("player_decks").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false});
+  userDecks=d||[];
+ }
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
   sb.from("profiles").select("id,display_name,avatar_url,deck_name,deck_card,role,created_at,selected_title"),
@@ -917,7 +959,7 @@ async function loadData(){
  initRealtime();
 }
 
-// Lógica de Submissão de Trocas
+// Lógica de Submissão de Trocas e Cadastro de Decks
 document.addEventListener("DOMContentLoaded", () => {
  const tForm = $("tradeForm");
  if(tForm) {
@@ -939,6 +981,37 @@ document.addEventListener("DOMContentLoaded", () => {
    if(error) return msg("Erro ao publicar anúncio: " + error.message, "error");
    msg("Anúncio publicado no mural de trocas com sucesso!", "success");
    tForm.reset();
+   await loadData();
+  };
+ }
+
+ const deckForm = $("addDeckForm");
+ if(deckForm) {
+  deckForm.onsubmit = async e => {
+   e.preventDefault();
+   if(!session) return openAuth();
+   const f = new FormData(e.target);
+   const dName = String(f.get("deck_name")||"").trim();
+   const dCard = String(f.get("deck_card")||"").trim();
+   if(!dName) return msg("Insira o nome do deck.","error");
+
+   const isFirst = userDecks.length === 0;
+
+   const {error} = await sb.from("player_decks").insert({
+    user_id: session.user.id,
+    deck_name: dName,
+    deck_card: dCard,
+    is_active: isFirst
+   });
+
+   if(error) return msg("Erro ao cadastrar deck: " + error.message, "error");
+
+   if (isFirst) {
+    await sb.from("profiles").update({ deck_name: dName, deck_card: dCard }).eq("id", session.user.id);
+   }
+
+   msg("Novo deck cadastrado com sucesso!", "success");
+   deckForm.reset();
    await loadData();
   };
  }
