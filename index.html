@@ -816,7 +816,7 @@ function renderProfile(){
 function renderDecks() {
  const list = $("myDecksList");
  if (!list) return;
- if (!userDecks.length) {
+ if (!userDecks || !userDecks.length) {
   list.innerHTML = empty("Você ainda não tem decks cadastrados. Cadastre seu primeiro deck abaixo!");
   return;
  }
@@ -901,6 +901,13 @@ function initRealtime(){
   .subscribe();
 }
 
+async function fetchUserDecks() {
+ if(!session) return [];
+ const { data, error } = await sb.from("player_decks").select("*").eq("user_id", session.user.id).order("created_at", { ascending: false });
+ if(error) console.error("Erro ao procurar decks:", error);
+ return data || [];
+}
+
 async function loadData(){
  if(!configured){renderRanking();renderMatches();renderHallOfFame();renderProfile();$("adminArea").innerHTML=empty("Configure o Supabase conforme o arquivo LEIA-ME.");return}
  const {data:auth}=await sb.auth.getSession();session=auth.session;
@@ -910,8 +917,7 @@ async function loadData(){
  if(session){
   let {data:p}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();
   profile=p;
-  let {data:d}=await sb.from("player_decks").select("*").eq("user_id",session.user.id).order("created_at",{ascending:false});
-  userDecks=d||[];
+  userDecks = await fetchUserDecks();
  }
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
@@ -961,6 +967,7 @@ document.addEventListener("DOMContentLoaded", () => {
   deckForm.onsubmit = async e => {
    e.preventDefault();
    if(!session) return openAuth();
+   
    const f = new FormData(e.target);
    const dName = String(f.get("deck_name")||"").trim();
    const dCard = String(f.get("deck_card")||"").trim();
@@ -968,14 +975,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
    const isFirst = userDecks.length === 0;
 
-   const {error} = await sb.from("player_decks").insert({
+   const { error } = await sb.from("player_decks").insert({
     user_id: session.user.id,
     deck_name: dName,
     deck_card: dCard,
     is_active: isFirst
    });
 
-   if(error) return msg("Erro ao cadastrar deck: " + error.message, "error");
+   if(error) {
+    msg("Erro do Supabase ao salvar: " + error.message, "error");
+    return;
+   }
 
    if (isFirst) {
     await sb.from("profiles").update({ deck_name: dName, deck_card: dCard }).eq("id", session.user.id);
@@ -983,6 +993,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
    msg("Novo deck cadastrado com sucesso!", "success");
    deckForm.reset();
+   
+   // Atualizar lista imediatamente
+   userDecks = await fetchUserDecks();
+   renderDecks();
    await loadData();
   };
  }
