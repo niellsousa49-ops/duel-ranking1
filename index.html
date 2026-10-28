@@ -260,7 +260,7 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  <section id="view-meta" class="grid hidden">
   <div class="panel">
    <h2>📊 Análise de Metagame Local (Meta Share & Winrates)</h2>
-   <p class="muted">Veja quais os decks mais jogados na comunidade e a taxa real de vitória de каждый arquétipo.</p>
+   <p class="muted">Veja quais os decks mais jogados na comunidade e a taxa real de vitória de cada arquétipo.</p>
    <div id="metaShareList" class="stack" style="margin-top:16px"></div>
   </div>
   <div class="panel">
@@ -676,7 +676,6 @@ window.openPlayerCard = function(pId) {
 function renderRanking(){
  let q=($("rankSearch").value||"").toLowerCase();
  
- // Filtra apenas jogadores ativos (is_active !== false)
  let rawRanked = players.filter(p => p.is_active !== false && (p.display_name+" "+(p.deck_name||"")+" "+(p.deck_card||"")).toLowerCase().includes(q)).map(p=>{
   const modeMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode && (m.player1_id === p.id || m.player2_id === p.id));
   const wins = modeMatches.filter(m => m.winner_id === p.id).length;
@@ -1013,7 +1012,7 @@ async function loadData(){
  }
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
-  sb.from("profiles").select("id,display_name,avatar_url,deck_name,deck_card,role,created_at,selected_title,is_active"),
+  sb.from("profiles").select("*"),
   sb.from("matches").select("*").order("created_at",{ascending:false}).limit(300),
   sb.from("seasons_history").select("*").order("created_at",{ascending:false}),
   sb.from("trades").select("*").order("created_at",{ascending:false}).limit(100)
@@ -1131,7 +1130,7 @@ $("opponentSelect").onchange=e=>{
  box.innerHTML=`<div class="notice" style="font-size:12px;margin:4px 0 10px">⚔️ <strong>Confronto Direto:</strong> ${myWins}V - ${oppWins}D (Total: ${past.length} duelos)</div>`;
 };
 
-$("reportForm").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),opponent=f.get("opponent"),winner=f.get("winner")==="me"?session.user.id:opponent,s1=Number(f.get("score1")),s2=Number(f.get("score2")),matchType=f.get("match_type");if(s1===s2){msg("O placar não pode terminar empatado.","error");return}if((winner===session.user.id&&s1<=s2)||(winner===opponent&&s2<=s1)){msg("O vencedor informado não condiz com o placar de games.","error");return}const duration=Number(f.get("duration_minutes"));if(!duration||duration<1||duration>600){msg("Informe a duração em minutos (1 a 600).","error");return}
+$("reportForm").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),opponent=f.get("opponent"),winner=f.get("winner")==="me"?session.user.id:opponent,s1=Number(f.get("score1")),s2=Number(f.get("score2")),matchType=f.get("match_type");if(s1===s2){msg("O placar não pode terminar empatado.","error");return}if((winner===session.user.id&&s1<=s2)|₂(winner===opponent&&s2<=s1)){msg("O vencedor informado não condiz com o placar de games.","error");return}const duration=Number(f.get("duration_minutes"));if(!duration||duration<1||duration>600){msg("Informe a duração em minutos (1 a 600).","error");return}
 
 const p1Deck = profile?.deck_name || "Deck não informado";
 const p2Deck = players.find(p=>p.id===opponent)?.deck_name || "Deck não informado";
