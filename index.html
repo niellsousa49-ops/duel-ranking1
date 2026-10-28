@@ -58,7 +58,8 @@ main{max-width:1150px;margin:0 auto;padding:28px 20px 60px}
 .hero-side{padding:22px;display:flex;flex-direction:column;justify-content:center;gap:13px}
 .statline{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}.statline:last-child{border:0}.statline span{color:var(--muted)}.statline strong{font-size:16px;color:var(--gold);text-shadow:0 0 8px var(--gold-glow)}
 
-.tabs{display:flex;gap:8px;overflow:auto;margin:20px 0}
+/* Menu responsivo otimizado para telemóveis */
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
 .tab{white-space:nowrap;position:relative;border:1px solid var(--line)}
 .tab.active{background:linear-gradient(135deg,#ca8a04,#854d0e);color:#fff;border-color:#fde047;font-weight:800;box-shadow:0 0 20px var(--gold-glow)}
 .tab-badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:99px;border:1px solid #000}
@@ -323,7 +324,7 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
      <input name="deck_name" required placeholder="Ex: HERO, Branded, Labrynth">
      <label>Carta em Destaque (Nome em inglês para a arte)</label>
      <input name="deck_card" placeholder="Ex: Elemental HERO Neos">
-     <button class="primary" style="margin-top:12px;width:100%">Cadastrar Deck</button>
+     <button class="primary" type="submit" style="margin-top:12px;width:100%">Cadastrar Deck</button>
     </form>
    </div>
   </div>
@@ -347,6 +348,29 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  </section>
  <div class="foot">Duel Ranking • Projeto independente da comunidade de Yu-Gi-Oh! Não afiliado à Konami.</div>
 </main>
+
+<!-- Botão Flutuante Rápido para a Calculadora de LP -->
+<a href="#calculadora" id="floating-lp-btn" onclick="setTab('lp'); return false;" title="Calculadora de LP Rápida" style="
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #f5af19, #f12711);
+  color: #fff;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  z-index: 9999;
+  text-decoration: none;
+  border: 2px solid #fff;
+">
+  ⚡
+</a>
+
 <div id="modalRoot"></div>
 <script>
 const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
@@ -509,7 +533,6 @@ function deckName(id){return players.find(p=>p.id===id)?.deck_name||"Deck não i
 function resultLabel(m){return `${playerName(m.player1_id)} ${m.score1} × ${m.score2} ${playerName(m.player2_id)}`;}
 function statusPill(s){const map={approved:["Aprovado","ok"],pending_opponent:["Aguardando oponente","pending"],pending_admin:["Aguardando admin","pending"],rejected:["Rejeitado","bad"]};const v=map[s]||[s,""];return `<span class="pill ${v[1]}">${v[0]}</span>`}
 
-// Cálculo de pontos conforme duração (< 50 min = 3 pts, >= 50 min e <= 55 min margem de tolerância admin, ex: 2 pts)
 function calculateMatchPoints(m) {
  if ((m.match_type || "competitive") === "casual") return 1;
  const duration = m.duration_minutes || 30;
@@ -744,9 +767,8 @@ function renderRanking(){
   
   let points = 0;
   if(rankingMode === 'casual') {
-   points = wins; // 1 pt por vitória casual
+   points = wins;
   } else {
-   // Soma flexível: < 50 min = 3 pts, >= 50 min = 2 pts
    modeMatches.filter(m => m.winner_id === p.id).forEach(m => {
     points += calculateMatchPoints(m);
    });
@@ -894,7 +916,7 @@ function renderProfile(){
    <input name="avatar_url" type="url" placeholder="https://exemplo.com/avatar.png" value="${esc(profile?.avatar_url||"")}">
    <label>⭐ Equipar Título Principal</label>
    <select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select>
-   <button class="primary" style="margin-top:14px">Salvar Perfil</button>
+   <button class="primary" type="submit" style="margin-top:14px">Salvar Perfil</button>
   </form>
   <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
   <button class="danger" style="width:100%" onclick="toggleDeactivateMyAccount()">🔒 Desativar a minha conta</button>
@@ -905,15 +927,27 @@ function renderProfile(){
  if(pForm) {
   pForm.onsubmit=async e=>{
    e.preventDefault();
+   const btnSave = pForm.querySelector('button[type="submit"]');
+   if(btnSave) { btnSave.disabled = true; btnSave.innerText = 'Salvando... ⏳'; }
+
    const f=new FormData(e.target);
    const newName=String(f.get("display_name")||"").trim();
    const avatarUrl=String(f.get("avatar_url")||"").trim();
    const selectedTitle=String(f.get("selected_title")||"").trim();
-   if(!newName)return msg("Digite um nome de duelista.","error");
+   if(!newName) {
+    if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
+    return msg("Digite um nome de duelista.","error");
+   }
    const alreadyUsed=players.some(p=>p.id!==session.user.id&&String(p.display_name||"").trim().toLocaleLowerCase("pt-BR")===newName.toLocaleLowerCase("pt-BR"));
-   if(alreadyUsed)return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
+   if(alreadyUsed) {
+    if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
+    return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
+   }
    const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,selected_title:selectedTitle}).eq("id",session.user.id);
-   if(error)return msg(error.message,"error");
+   if(error) {
+    if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
+    return msg(error.message,"error");
+   }
    msg("Perfil atualizado com sucesso!","success");
    await loadData();
   };
@@ -1024,7 +1058,6 @@ function renderAdmin(){
    const f = new FormData(e.target);
    const seasonName = f.get("season_name");
 
-   // Calcula o campeão da temporada atual (Geral ou filtrada)
    let compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive');
    if(activeSeasonId !== "all") compMatches = compMatches.filter(m => m.season_id === activeSeasonId);
 
@@ -1039,7 +1072,6 @@ function renderAdmin(){
    const champion = ranked[0];
    if(!champion) return msg("Não há jogadores pontuando no ranking para encerrar a temporada.","error");
 
-   // Insere no hall da fama
    const {data: newSeason, error} = await sb.from("seasons_history").insert({
     season_name: seasonName,
     champion_name: champion.display_name,
@@ -1113,7 +1145,6 @@ async function loadData(){
  if(pe||me){msg("Não foi possível carregar os dados. Confira a configuração do Supabase. "+(pe?.message||me?.message),"error");return}
  players=pdata||[];matches=mdata||[];seasons=sdata||[];trades=tdata||[];
  
- // Atualizar seletor de temporadas no header
  const sel = $("seasonSelector");
  if(sel) {
   let opts = `<option value="all">🌐 Todas as Temporadas (Geral)</option>`;
@@ -1138,11 +1169,17 @@ document.addEventListener("DOMContentLoaded", () => {
   tForm.onsubmit = async e => {
    e.preventDefault();
    if(!session) return openAuth();
+   const btnTrade = tForm.querySelector('button[type="submit"]');
+   if(btnTrade) { btnTrade.disabled = true; btnTrade.innerText = 'Publicando... ⏳'; }
+
    const f = new FormData(e.target);
    const cardName = String(f.get("card_name")||"").trim();
    const details = String(f.get("details")||"").trim();
    const tradeType = f.get("trade_type");
-   if(!cardName) return msg("Insira o nome da carta.","error");
+   if(!cardName) {
+    if(btnTrade) { btnTrade.disabled = false; btnTrade.innerText = 'Publicar no Mural'; }
+    return msg("Insira o nome da carta.","error");
+   }
 
    const {error} = await sb.from("trades").insert({
     user_id: session.user.id,
@@ -1150,7 +1187,10 @@ document.addEventListener("DOMContentLoaded", () => {
     card_name: cardName,
     details: details
    });
-   if(error) return msg("Erro ao publicar anúncio: " + error.message, "error");
+   if(error) {
+    if(btnTrade) { btnTrade.disabled = false; btnTrade.innerText = 'Publicar no Mural'; }
+    return msg("Erro ao publicar anúncio: " + error.message, "error");
+   }
    msg("Anúncio publicado no mural de trocas com sucesso!", "success");
    tForm.reset();
    await loadData();
@@ -1163,10 +1203,16 @@ document.addEventListener("DOMContentLoaded", () => {
    e.preventDefault();
    if(!session) return openAuth();
    
+   const btnDeck = deckForm.querySelector('button[type="submit"]');
+   if(btnDeck) { btnDeck.disabled = true; btnDeck.innerText = 'Cadastrando... ⏳'; }
+
    const f = new FormData(e.target);
    const dName = String(f.get("deck_name")||"").trim();
    const dCard = String(f.get("deck_card")||"").trim();
-   if(!dName) return msg("Insira o nome do deck.","error");
+   if(!dName) {
+    if(btnDeck) { btnDeck.disabled = false; btnDeck.innerText = 'Cadastrar Deck'; }
+    return msg("Insira o nome do deck.","error");
+   }
 
    const isFirst = userDecks.length === 0;
 
@@ -1178,6 +1224,7 @@ document.addEventListener("DOMContentLoaded", () => {
    });
 
    if(error) {
+    if(btnDeck) { btnDeck.disabled = false; btnDeck.innerText = 'Cadastrar Deck'; }
     msg("Erro do Supabase ao salvar: " + error.message, "error");
     return;
    }
@@ -1222,7 +1269,7 @@ window.deleteMatch=async id=>{
 };
 
 window.openReport=()=>{if(!session)return openAuth();let options=players.filter(p=>p.id!==session.user.id).map(p=>`<option value="${p.id}">${esc(p.display_name)} — ${esc(p.deck_name||"Deck não informado")}</option>`).join("");if(!options){msg("Ainda não há outros duelistas cadastrados.","error");return}
-openModal({title:"Registrar Duelo",body:`<form id="reportForm"><label>Categoria do Duelo</label><select name="match_type"><option value="competitive">⚔️ Competitivo (2-3 pts conforme duração)</option><option value="casual">🤝 Casual / Treino (1 pt)</option></select><label>Oponente</label><select name="opponent" id="opponentSelect" required><option value="">Escolha o oponente</option>${options}</select><div id="h2hNotice" style="margin-top:6px"></div><div class="formgrid"><div><label>Seus Games Vencidos</label><select name="score1"><option>2</option><option>1</option><option>0</option></select></div><div><label>Games do Oponente</label><select name="score2"><option>0</option><option>1</option><option>2</option></select></div></div><label>Quem venceu o duelo?</label><select name="winner" required><option value="me">Eu</option><option value="opponent">Oponente</option></select><label>Duração em minutos</label><input type="number" name="duration_minutes" id="durationMinutes" min="1" max="600" required placeholder="Digite a duração em minutos"><label>Observação (opcional)</label><textarea name="note" rows="2" maxlength="240" placeholder="Ex.: Rodada 3 do torneio local"></textarea><button class="primary" style="margin-top:16px;width:100%">Enviar Resultado do Duelo</button><p class="noticebar">O oponente deverá confirmar o resultado antes da aprovação do administrador.</p></form>`});
+openModal({title:"Registrar Duelo",body:`<form id="reportForm"><label>Categoria do Duelo</label><select name="match_type"><option value="competitive">⚔️ Competitivo (2-3 pts conforme duração)</option><option value="casual">🤝 Casual / Treino (1 pt)</option></select><label>Oponente</label><select name="opponent" id="opponentSelect" required><option value="">Escolha o oponente</option>${options}</select><div id="h2hNotice" style="margin-top:6px"></div><div class="formgrid"><div><label>Seus Games Vencidos</label><select name="score1"><option>2</option><option>1</option><option>0</option></select></div><div><label>Games do Oponente</label><select name="score2"><option>0</option><option>1</option><option>2</option></select></div></div><label>Quem venceu o duelo?</label><select name="winner" required><option value="me">Eu</option><option value="opponent">Oponente</option></select><label>Duração em minutos</label><input type="number" name="duration_minutes" id="durationMinutes" min="1" max="600" required placeholder="Digite a duração em minutos"><label>Observação (opcional)</label><textarea name="note" rows="2" maxlength="240" placeholder="Ex.: Rodada 3 do torneio local"></textarea><button class="primary" type="submit" style="margin-top:16px;width:100%">Enviar Resultado do Duelo</button><p class="noticebar">O oponente deverá confirmar o resultado antes da aprovação do administrador.</p></form>`});
 
 $("opponentSelect").onchange=e=>{
  const oppId=e.target.value;
@@ -1237,21 +1284,32 @@ $("opponentSelect").onchange=e=>{
 
 $("reportForm").onsubmit=async e=>{
  e.preventDefault();
+ const btnReport = e.target.querySelector('button[type="submit"]');
+ if(btnReport) { btnReport.disabled = true; btnReport.innerText = 'Enviando... ⏳'; }
+
  const f=new FormData(e.target),opponent=f.get("opponent"),winner=f.get("winner")==="me"?session.user.id:opponent,s1=Number(f.get("score1")),s2=Number(f.get("score2")),matchType=f.get("match_type");
  
- if(s1===s2){msg("O placar não pode terminar empatado.","error");return}
+ if(s1===s2){
+  if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+  return msg("O placar não pode terminar empatado.","error");
+ }
  
- // Validação rigorosa MD3 válida: 2-0, 2-1, 0-2, 1-2
  const isValidMD3 = (s1 === 2 && (s2 === 0 || s2 === 1)) || (s2 === 2 && (s1 === 0 || s1 === 1));
  if(!isValidMD3) {
-  msg("Placar inválido para MD3. Os placares permitidos são 2–0, 2–1, 0–2 ou 1–2.", "error");
-  return;
+  if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+  return msg("Placar inválido para MD3. Os placares permitidos são 2–0, 2–1, 0–2 ou 1–2.", "error");
  }
 
- if((winner===session.user.id&&s1<=s2)||(winner===opponent&&s2<=s1)){msg("O vencedor informado não condiz com o placar de games.","error");return}
+ if((winner===session.user.id&&s1<=s2)||(winner===opponent&&s2<=s1)){
+  if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+  return msg("O vencedor informado não condiz com o placar de games.","error");
+ }
  
  const duration=Number(f.get("duration_minutes"));
- if(!duration||duration<1||duration>600){msg("Informe a duração em minutos (1 a 600).","error");return}
+ if(!duration||duration<1||duration>600){
+  if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+  return msg("Informe a duração em minutos (1 a 600).","error");
+ }
 
  const p1Deck = profile?.deck_name || "Deck não informado";
  const p2Deck = players.find(p=>p.id===opponent)?.deck_name || "Deck não informado";
@@ -1272,7 +1330,10 @@ $("reportForm").onsubmit=async e=>{
   season_id: currentActiveSeason
  });
 
- if(error){msg("Erro ao enviar duelo: "+error.message,"error");return}
+ if(error){
+  if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+  return msg("Erro ao enviar duelo: "+error.message,"error");
+ }
  closeModal();
  msg("Duelo registrado com sucesso! O oponente precisa confirmar o placar.","success");
  setTab("partidas");
