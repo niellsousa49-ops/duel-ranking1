@@ -1130,7 +1130,7 @@ $("opponentSelect").onchange=e=>{
  box.innerHTML=`<div class="notice" style="font-size:12px;margin:4px 0 10px">⚔️ <strong>Confronto Direto:</strong> ${myWins}V - ${oppWins}D (Total: ${past.length} duelos)</div>`;
 };
 
-$("reportForm").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),opponent=f.get("opponent"),winner=f.get("winner")==="me"?session.user.id:opponent,s1=Number(f.get("score1")),s2=Number(f.get("score2")),matchType=f.get("match_type");if(s1===s2){msg("O placar não pode terminar empatado.","error");return}if((winner===session.user.id&&s1<=s2)|₂(winner===opponent&&s2<=s1)){msg("O vencedor informado não condiz com o placar de games.","error");return}const duration=Number(f.get("duration_minutes"));if(!duration||duration<1||duration>600){msg("Informe a duração em minutos (1 a 600).","error");return}
+$("reportForm").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),opponent=f.get("opponent"),winner=f.get("winner")==="me"?session.user.id:opponent,s1=Number(f.get("score1")),s2=Number(f.get("score2")),matchType=f.get("match_type");if(s1===s2){msg("O placar não pode terminar empatado.","error");return}if((winner===session.user.id&&s1<=s2)||(winner===opponent&&s2<=s1)){msg("O vencedor informado não condiz com o placar de games.","error");return}const duration=Number(f.get("duration_minutes"));if(!duration||duration<1||duration>600){msg("Informe a duração em minutos (1 a 600).","error");return}
 
 const p1Deck = profile?.deck_name || "Deck não informado";
 const p2Deck = players.find(p=>p.id===opponent)?.deck_name || "Deck não informado";
