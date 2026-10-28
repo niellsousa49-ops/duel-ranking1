@@ -7,9 +7,9 @@
   "theme_color": "#030408",
   "icons": [
     {
-      "src": "https://images.ygoprodeck.com/images/card_back.jpg",
+      "src": "icon.png",
       "sizes": "512x512",
-      "type": "image/jpeg"
+      "type": "image/png"
     }
   ]
 }
