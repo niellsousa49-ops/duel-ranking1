@@ -260,7 +260,7 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  <section id="view-meta" class="grid hidden">
   <div class="panel">
    <h2>📊 Análise de Metagame Local (Meta Share & Winrates)</h2>
-   <p class="muted">Veja quais os decks mais jogados na comunidade e a taxa real de vitória de каждого arquétipo.</p>
+   <p class="muted">Veja quais os decks mais jogados na comunidade e a taxa real de vitória de cada arquétipo.</p>
    <div id="metaShareList" class="stack" style="margin-top:16px"></div>
   </div>
   <div class="panel">
@@ -304,7 +304,7 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  <section id="view-admin" class="hidden">
   <div class="panel">
    <h2>🛡️ Painel de Administração</h2>
-   <p class="muted">Gerencie os resultados dos duelos e feche temporadas da comunidade.</p>
+   <p class="muted">Gerencie os resultados dos duelos, contas de utilizadores e feche temporadas da comunidade.</p>
    
    <div style="background:#0a0e1c;border:1px solid var(--line);padding:16px;border-radius:10px;margin:16px 0">
     <h3 style="margin:0 0 8px;color:var(--gold)">🏆 Gestão de Temporada (Hall da Fama)</h3>
@@ -376,7 +376,6 @@ window.resetLP = function(player) {
  $("lpB").textContent = lpValues.B;
 };
 
-// Função para minimizar/expandir o painel de Meus Decks
 window.toggleDecksMinimize = function() {
  const body = $("decksContentBody");
  const btn = $("minimizeDecksBtn");
@@ -814,6 +813,8 @@ function renderProfile(){
    <select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select>
    <button class="primary" style="margin-top:14px">Salvar Perfil</button>
   </form>
+  <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+  <button class="danger" style="width:100%" onclick="deleteMyAccount()">🗑️ Excluir a minha conta permanentemente</button>
   <p class="noticebar">Cargo: ${esc(profile?.role||"player")}</p>
  `;
 
@@ -837,6 +838,25 @@ function renderProfile(){
 
  renderDecks();
 }
+
+window.deleteMyAccount = async function() {
+ if (!confirm("Tem certeza absoluta que deseja excluir a sua conta? Todos os seus decks e dados serão removidos e esta ação não pode ser desfeita.")) return;
+ 
+ const userId = session.user.id;
+ 
+ // Apagar decks do utilizador
+ await sb.from("player_decks").delete().eq("user_id", userId);
+ // Apagar perfil
+ const { error } = await sb.from("profiles").delete().eq("id", userId);
+ 
+ if (error) {
+  return msg("Erro ao excluir dados do perfil: " + error.message, "error");
+ }
+
+ await sb.auth.signOut();
+ msg("A sua conta foi excluída com sucesso.", "success");
+ await loadData();
+};
 
 function renderDecks() {
  const list = $("myDecksList");
@@ -887,8 +907,29 @@ window.deleteDeck = async function(deckId) {
 
 function renderAdmin(){
  if(!isAdmin()){$("adminArea").innerHTML=empty("Acesso restrito a administradores.");return}
+ 
  const pending=matches.filter(m=>["pending_admin","pending_opponent"].includes(m.status));
- $("adminArea").innerHTML=`<h3>Duelos pendentes (${pending.length})</h3><div class="stack">${pending.map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo pendente.")}</div>`;
+ 
+ const usersListHtml = players.map(p => `
+  <div class="match" style="display:flex;justify-content:space-between;align-items:center">
+   <div>
+    <strong>${esc(p.display_name)}</strong>
+    <small class="muted">Cargo: ${esc(p.role || 'player')} • ID: ${p.id}</small>
+   </div>
+   <div>
+    ${p.id !== session?.user?.id ? `<button class="danger" style="padding:6px 10px;font-size:11px" onclick="adminDeleteUser('${p.id}', '${esc(p.display_name)}')">🗑️ Excluir Conta</button>` : '<span class="pill ok">Sua Conta (Admin)</span>'}
+   </div>
+  </div>
+ `).join("");
+
+ $("adminArea").innerHTML=`
+  <h3>Duelos pendentes (${pending.length})</h3>
+  <div class="stack">${pending.map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo pendente.")}</div>
+  
+  <h3 style="margin-top:24px">👥 Gestão de Contas de Duelistas</h3>
+  <p class="muted" style="font-size:13px;margin-bottom:12px">Como administrador, você pode aprovar a exclusão e remover contas ou perfis cadastrados na comunidade.</p>
+  <div class="stack">${usersListHtml}</div>
+ `;;
 
  const sForm = $("seasonForm");
  if(sForm) {
@@ -919,6 +960,23 @@ function renderAdmin(){
   };
  }
 }
+
+window.adminDeleteUser = async function(userId, userName) {
+ if(!isAdmin()) return;
+ if(!confirm(`Tem certeza que deseja excluir o perfil e os dados do duelista "${userName}"?`)) return;
+ 
+ // Apagar decks do utilizador
+ await sb.from("player_decks").delete().eq("user_id", userId);
+ // Apagar perfil do utilizador
+ const { error } = await sb.from("profiles").delete().eq("id", userId);
+ 
+ if(error) {
+  return msg("Erro ao excluir conta: " + error.message, "error");
+ }
+
+ msg(`A conta de "${userName}" foi excluída com sucesso.`, "success");
+ await loadData();
+};
 
 function initRealtime(){
  if(!configured || realtimeSub) return;
