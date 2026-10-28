@@ -636,7 +636,7 @@ window.openPlayerCard = function(pId) {
      
      <div style="text-align:center;font-size:11px" class="muted">Total de ${totalH2H} duelos disputados entre vocês</div>
 
-     ${recentH2H ? `<div style="margin-top:10px"><small class="muted" style="display:block;margin-bottom:4px;font-weight:750">ÚLTIMOS CONFRONTOS</small>${recentH2H}</div>` : ''}
+     ${recentH2H ? `<div style="margin-top:10px"><small class="muted" style="display:block;margin-bottom:4px;font-weight:750">ÚLTIMOS CONFRONTOS</small><${recentH2H}</div>` : ''}
     </div>
    `;
   }
@@ -676,7 +676,8 @@ window.openPlayerCard = function(pId) {
 function renderRanking(){
  let q=($("rankSearch").value||"").toLowerCase();
  
- let rawRanked = players.filter(p=>(p.display_name+" "+(p.deck_name||"")+" "+(p.deck_card||"")).toLowerCase().includes(q)).map(p=>{
+ // Filtra apenas jogadores ativos (is_active !== false)
+ let rawRanked = players.filter(p => p.is_active !== false && (p.display_name+" "+(p.deck_name||"")+" "+(p.deck_card||"")).toLowerCase().includes(q)).map(p=>{
   const modeMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode && (m.player1_id === p.id || m.player2_id === p.id));
   const wins = modeMatches.filter(m => m.winner_id === p.id).length;
   const losses = modeMatches.filter(m => m.winner_id && m.winner_id !== p.id).length;
@@ -745,7 +746,7 @@ function renderRanking(){
   </tr>`;
  }).join("")}</tbody></table></div>` : empty(configured ? "Nenhum duelista encontrado nesta modalidade." : "Configure o Supabase para carregar duelistas reais.");
 
- $("statPlayers").textContent = players.length;
+ $("statPlayers").textContent = players.filter(p => p.is_active !== false).length;
  $("statMatches").textContent = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode).length;
  $("statLeader").textContent = rankingMode === 'competitive' ? (ranked[0]?.display_name || "—") : "Modo Casual";
  loadAllArts();
@@ -814,7 +815,7 @@ function renderProfile(){
    <button class="primary" style="margin-top:14px">Salvar Perfil</button>
   </form>
   <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
-  <button class="danger" style="width:100%" onclick="deleteMyAccount()">🗑️ Excluir a minha conta permanentemente</button>
+  <button class="danger" style="width:100%" onclick="toggleDeactivateMyAccount()">🔒 Desativar a minha conta</button>
   <p class="noticebar">Cargo: ${esc(profile?.role||"player")}</p>
  `;
 
@@ -839,22 +840,18 @@ function renderProfile(){
  renderDecks();
 }
 
-window.deleteMyAccount = async function() {
- if (!confirm("Tem certeza absoluta que deseja excluir a sua conta? Todos os seus decks e dados serão removidos e esta ação não pode ser desfeita.")) return;
+window.toggleDeactivateMyAccount = async function() {
+ if (!confirm("Tem certeza que deseja desativar a sua conta? Ela ficará oculta do ranking até decidir reativar.")) return;
  
  const userId = session.user.id;
- 
- // Apagar decks do utilizador
- await sb.from("player_decks").delete().eq("user_id", userId);
- // Apagar perfil
- const { error } = await sb.from("profiles").delete().eq("id", userId);
+ const { error } = await sb.from("profiles").update({ is_active: false }).eq("id", userId);
  
  if (error) {
-  return msg("Erro ao excluir dados do perfil: " + error.message, "error");
+  return msg("Erro ao desativar conta: " + error.message, "error");
  }
 
  await sb.auth.signOut();
- msg("A sua conta foi excluída com sucesso.", "success");
+ msg("A sua conta foi desativada e ocultada com sucesso.", "success");
  await loadData();
 };
 
@@ -910,24 +907,29 @@ function renderAdmin(){
  
  const pending=matches.filter(m=>["pending_admin","pending_opponent"].includes(m.status));
  
- const usersListHtml = players.map(p => `
-  <div class="match" style="display:flex;justify-content:space-between;align-items:center">
-   <div>
-    <strong>${esc(p.display_name)}</strong>
-    <small class="muted">Cargo: ${esc(p.role || 'player')} • ID: ${p.id}</small>
+ const usersListHtml = players.map(p => {
+  const isActive = p.is_active !== false;
+  return `
+   <div class="match" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+     <strong>${esc(p.display_name)} ${!isActive ? '<span class="pill bad">Desativada</span>' : ''}</strong>
+     <small class="muted">Cargo: ${esc(p.role || 'player')} • ID: ${p.id}</small>
+    </div>
+    <div style="display:flex;gap:6px">
+     ${p.id !== session?.user?.id ? `
+      <button class="btn" style="padding:6px 10px;font-size:11px" onclick="adminToggleUser('${p.id}', ${isActive})">${isActive ? '🔒 Desativar' : '🔓 Reativar'}</button>
+     ` : '<span class="pill ok">Você (Admin)</span>'}
+    </div>
    </div>
-   <div>
-    ${p.id !== session?.user?.id ? `<button class="danger" style="padding:6px 10px;font-size:11px" onclick="adminDeleteUser('${p.id}', '${esc(p.display_name)}')">🗑️ Excluir Conta</button>` : '<span class="pill ok">Sua Conta (Admin)</span>'}
-   </div>
-  </div>
- `).join("");
+  `;
+ }).join("");
 
  $("adminArea").innerHTML=`
   <h3>Duelos pendentes (${pending.length})</h3>
   <div class="stack">${pending.map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo pendente.")}</div>
   
-  <h3 style="margin-top:24px">👥 Gestão de Contas de Duelistas</h3>
-  <p class="muted" style="font-size:13px;margin-bottom:12px">Como administrador, você pode aprovar a exclusão e remover contas ou perfis cadastrados na comunidade.</p>
+  <h3 style="margin-top:24px">👥 Gestão de Contas e Desativações</h3>
+  <p class="muted" style="font-size:13px;margin-bottom:12px">Como administrador, você pode desativar ou reativar contas de duelistas na comunidade.</p>
   <div class="stack">${usersListHtml}</div>
  `;;
 
@@ -961,20 +963,20 @@ function renderAdmin(){
  }
 }
 
-window.adminDeleteUser = async function(userId, userName) {
+window.adminToggleUser = async function(userId, currentActive) {
  if(!isAdmin()) return;
- if(!confirm(`Tem certeza que deseja excluir o perfil e os dados do duelista "${userName}"?`)) return;
+ const newState = !currentActive;
+ const actionText = newState ? "reativar" : "desativar";
  
- // Apagar decks do utilizador
- await sb.from("player_decks").delete().eq("user_id", userId);
- // Apagar perfil do utilizador
- const { error } = await sb.from("profiles").delete().eq("id", userId);
+ if(!confirm(`Tem certeza que deseja ${actionText} esta conta?`)) return;
+ 
+ const { error } = await sb.from("profiles").update({ is_active: newState }).eq("id", userId);
  
  if(error) {
-  return msg("Erro ao excluir conta: " + error.message, "error");
+  return msg("Erro ao atualizar estado da conta: " + error.message, "error");
  }
 
- msg(`A conta de "${userName}" foi excluída com sucesso.`, "success");
+ msg(`Conta ${newState ? 'reativada' : 'desativada'} com sucesso.`, "success");
  await loadData();
 };
 
@@ -1011,7 +1013,7 @@ async function loadData(){
  }
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
-  sb.from("profiles").select("id,display_name,avatar_url,deck_name,deck_card,role,created_at,selected_title"),
+  sb.from("profiles").select("id,display_name,avatar_url,deck_name,deck_card,role,created_at,selected_title,is_active"),
   sb.from("matches").select("*").order("created_at",{ascending:false}).limit(300),
   sb.from("seasons_history").select("*").order("created_at",{ascending:false}),
   sb.from("trades").select("*").order("created_at",{ascending:false}).limit(100)
