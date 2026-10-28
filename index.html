@@ -853,6 +853,8 @@ window.deleteDeck = async function(deckId) {
  const { error } = await sb.from("player_decks").delete().eq("id", deckId);
  if (error) return msg("Erro ao apagar deck: " + error.message, "error");
  msg("Deck apagado com sucesso.", "success");
+ userDecks = await fetchUserDecks();
+ renderDecks();
  await loadData();
 };
 
@@ -917,7 +919,7 @@ async function loadData(){
  if(session){
   let {data:p}=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();
   profile=p;
-  userDecks = await fetchUserDecks();
+  userDecks = await fetchUserDecks(); // BUSCA OS DECKS DIRETAMENTE AO ENTRAR NA SESSÃO
  }
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
