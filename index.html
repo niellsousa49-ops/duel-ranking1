@@ -348,7 +348,6 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
  <div class="foot">Duel Ranking • Projeto independente da comunidade de Yu-Gi-Oh! Não afiliado à Konami.</div>
 </main>
 
-<!-- Botão Flutuante Rápido para a Calculadora de LP -->
 <a href="#calculadora" id="floating-lp-btn" onclick="setTab('lp'); return false;" title="Calculadora de LP Rápida" style="
   position: fixed;
   bottom: 20px;
@@ -376,7 +375,7 @@ const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_gGApyS1mejqARPMchPI1NA_3GgIp7X_";
 const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("COLE_AQUI") && SUPABASE_ANON_KEY.length > 30 && !SUPABASE_ANON_KEY.includes("COLE_AQUI");
 const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", activeSeasonId="all", realtimeSub=null;
+let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", activeSeasonId="active", activeSeasonObj=null, realtimeSub=null;
 const cardArtCache = {};
 const CARD_BACK_URL = 'https://images.ygoprodeck.com/images/card_back.jpg';
 const $=id=>document.getElementById(id);
@@ -520,8 +519,17 @@ window.changeSeason = function(val) {
  activeSeasonId = val;
  const sel = $("seasonSelector");
  if(sel) sel.value = val;
- const sObj = seasons.find(s => s.id === val);
- $("currentSeasonTitle").textContent = sObj ? `Temporada: ${sObj.season_name}` : "Ranking Geral (Todas as Temporadas)";
+ 
+ if(val === "active") {
+  activeSeasonObj = seasons.find(s => s.is_active === true) || seasons[0] || null;
+  $("currentSeasonTitle").textContent = activeSeasonObj ? `Temporada Ativa: ${activeSeasonObj.season_name}` : "Temporada Ativa";
+ } else if(val === "all") {
+  activeSeasonObj = null;
+  $("currentSeasonTitle").textContent = "Ranking Geral (Todas as Temporadas)";
+ } else {
+  activeSeasonObj = seasons.find(s => s.id === val);
+  $("currentSeasonTitle").textContent = activeSeasonObj ? `Temporada: ${activeSeasonObj.season_name}` : "Ranking do Local";
+ }
  renderRanking();
  renderMatches();
 };
@@ -539,8 +547,10 @@ function calculateMatchPoints(m) {
 }
 
 function getPlayerUnlockedData(pId, isLeader=false){
- let seasonFilteredMatches = matches.filter(m=>m.status==="approved" && (m.match_type||"competitive")==="competitive" && (m.player1_id===pId||m.player2_id===pId));
- if(activeSeasonId !== "all") {
+ let seasonFilteredMatches = matches.filter(m=>m.status==="approved" && (m.match_type||"competitive")===rankingMode && (m.player1_id===pId||m.player2_id===pId));
+ if(activeSeasonId === "active" && activeSeasonObj) {
+  seasonFilteredMatches = seasonFilteredMatches.filter(m => m.season_id === activeSeasonObj.id);
+ } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
   seasonFilteredMatches = seasonFilteredMatches.filter(m => m.season_id === activeSeasonId);
  }
  const approved = seasonFilteredMatches.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -563,7 +573,7 @@ function getPlayerUnlockedData(pId, isLeader=false){
  else if(totalMatches >= 3) titles.push("📚 Estudante da Academia");
  else if(totalMatches >= 1) titles.push("🐣 Recruta Perdido");
 
- if(isLeader) titles.push("👑 Rei dos Jogos (King of Games)");
+ if(isLeader && rankingMode === 'competitive') titles.push("👑 Rei dos Jogos (King of Games)");
  if(totalLosses >= 5 && totalLosses > (totalMatches - totalLosses)) titles.push("🤡 Mestre do Choro");
  if(recent.filter(r=>r==='D').length >= 3) titles.push("💔 Bateu na Trave");
  if(totalMatches >= 8 && (totalMatches - totalLosses) / totalMatches >= 0.75) titles.push("🔥 O Invencível");
@@ -596,8 +606,10 @@ function renderTrades() {
 }
 
 function renderMetagame() {
- let approved = matches.filter(m => m.status === "approved");
- if(activeSeasonId !== "all") {
+ let approved = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode);
+ if(activeSeasonId === "active" && activeSeasonObj) {
+  approved = approved.filter(m => m.season_id === activeSeasonObj.id);
+ } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
   approved = approved.filter(m => m.season_id === activeSeasonId);
  }
  const deckStats = {};
@@ -613,26 +625,34 @@ function renderMetagame() {
   const d1 = m.p1_deck || deckName(m.player1_id);
   const d2 = m.p2_deck || deckName(m.player2_id);
 
-  [d1, d2].forEach(d => {
-   if(!deckStats[d]) deckStats[d] = { name: d, totalMatches: 0, wins: 0 };
-   deckStats[d].totalMatches++;
-  });
+  if (d1) {
+   if(!deckStats[d1]) deckStats[d1] = { name: d1, totalMatches: 0, wins: 0 };
+   deckStats[d1].totalMatches++;
+   if (m.winner_id === m.player1_id) deckStats[d1].wins++;
+  }
 
-  const winnerDeck = m.winner_id === m.player1_id ? d1 : d2;
-  if(deckStats[winnerDeck]) deckStats[winnerDeck].wins++;
+  if (d2 && d2 !== d1) {
+   if(!deckStats[d2]) deckStats[d2] = { name: d2, totalMatches: 0, wins: 0 };
+   deckStats[d2].totalMatches++;
+   if (m.winner_id === m.player2_id) deckStats[d2].wins++;
+  } else if (d2 && d2 === d1) {
+   deckStats[d1].totalMatches++;
+   if (m.winner_id === m.player2_id) deckStats[d1].wins++;
+  }
  });
 
- const totalAllMatches = approved.length * 2 || 1;
+ const totalAllDecksPlayed = Object.values(deckStats).reduce((acc, d) => acc + d.totalMatches, 0) || 1;
  const sortedDecks = Object.values(deckStats).sort((a,b) => b.totalMatches - a.totalMatches);
+ const modeLabel = rankingMode === 'casual' ? 'Casual' : 'Competitivo';
 
  $("metaShareList").innerHTML = sortedDecks.length ? sortedDecks.map(d => {
-  const share = Math.round((d.totalMatches / totalAllMatches) * 100);
+  const share = Math.round((d.totalMatches / totalAllDecksPlayed) * 100);
   const winrate = d.totalMatches > 0 ? Math.round((d.wins / d.totalMatches) * 100) : 0;
   return `
    <div class="match">
     <div style="display:flex;justify-content:space-between;align-items:center">
      <strong style="font-size:15px;color:var(--gold)">${esc(d.name)}</strong>
-     <span class="pill">${d.totalMatches} duelos (${share}% do Meta)</span>
+     <span class="pill">${d.totalMatches} aparições (${share}% do Meta)</span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:6px">
      <span>Taxa de Vitória (Winrate): <strong style="color:var(--green)">${winrate}%</strong></span>
@@ -643,7 +663,7 @@ function renderMetagame() {
     </div>
    </div>
   `;
- }).join("") : empty("Nenhum duelo registrado para compor o metagame.");
+ }).join("") : empty(`Nenhum duelo ${modeLabel.toLowerCase()} registrado para compor o metagame.`);
 
  const sortedCards = Object.entries(cardCounts).sort((a,b) => b[1] - a[1]);
  $("topCardsList").innerHTML = sortedCards.length ? sortedCards.map(([cardName, count]) => `
@@ -664,12 +684,16 @@ window.openPlayerCard = function(pId) {
  const isTargetLeader = (players.sort((a,b)=>b.points-a.points||b.wins-a.wins)[0]?.id === pId);
  const targetData = getPlayerUnlockedData(pId, isTargetLeader);
  
- let compMatches = matches.filter(m=>m.status==="approved" && (m.match_type||"competitive")==="competitive" && (m.player1_id===pId||m.player2_id===pId));
- if(activeSeasonId !== "all") compMatches = compMatches.filter(m => m.season_id === activeSeasonId);
+ let compMatches = matches.filter(m=>m.status==="approved" && (m.match_type||"competitive")===rankingMode && (m.player1_id===pId||m.player2_id===pId));
+ if(activeSeasonId === "active" && activeSeasonObj) {
+  compMatches = compMatches.filter(m => m.season_id === activeSeasonObj.id);
+ } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
+  compMatches = compMatches.filter(m => m.season_id === activeSeasonId);
+ }
 
  const wins = compMatches.filter(m=>m.winner_id===pId).length;
  const losses = compMatches.filter(m=>m.winner_id && m.winner_id!==pId).length;
- const totalPoints = compMatches.filter(m=>m.winner_id===pId).reduce((acc, m) => acc + calculateMatchPoints(m), 0);
+ const totalPoints = rankingMode === 'casual' ? wins : compMatches.filter(m=>m.winner_id===pId).reduce((acc, m) => acc + calculateMatchPoints(m), 0);
  const winrate = compMatches.length > 0 ? Math.round((wins / compMatches.length) * 100) : 0;
 
  let h2hHtml = `<div class="notice" style="font-size:12px;margin-bottom:14px">💡 Faça login para comparar seu histórico de duelos diretos contra este jogador!</div>`;
@@ -679,8 +703,12 @@ window.openPlayerCard = function(pId) {
   if (myId === pId) {
    h2hHtml = `<p class="muted" style="font-size:12px;margin-bottom:14px">Este é o seu próprio perfil estatístico.</p>`;
   } else {
-   let directMatches = matches.filter(m => m.status === "approved" && ((m.player1_id === myId && m.player2_id === pId) || (m.player1_id === pId && m.player2_id === myId)));
-   if(activeSeasonId !== "all") directMatches = directMatches.filter(m => m.season_id === activeSeasonId);
+   let directMatches = matches.filter(m => m.status === "approved" && (m.match_type||"competitive")===rankingMode && ((m.player1_id === myId && m.player2_id === pId) || (m.player1_id === pId && m.player2_id === myId)));
+   if(activeSeasonId === "active" && activeSeasonObj) {
+    directMatches = directMatches.filter(m => m.season_id === activeSeasonObj.id);
+   } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
+    directMatches = directMatches.filter(m => m.season_id === activeSeasonId);
+   }
    directMatches.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
    const myH2HWins = directMatches.filter(m => m.winner_id === myId).length;
@@ -701,7 +729,7 @@ window.openPlayerCard = function(pId) {
 
    h2hHtml = `
     <div style="background:#0b1124;border:1px solid var(--line);padding:14px;border-radius:10px;margin-bottom:16px">
-     <h3 style="margin:0 0 8px;color:var(--gold);font-size:14px">⚔️ Confronto Direto (Você vs ${esc(targetPlayer.display_name)})</h3>
+     <h3 style="margin:0 0 8px;color:var(--gold);font-size:14px">⚔️ Confronto Direto (${rankingMode === 'casual' ? 'Casual' : 'Competitivo'})</h3>
      
      <div style="display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:13px">
       <span style="color:var(--green)">Você (${myH2HWins}V)</span>
@@ -737,8 +765,8 @@ window.openPlayerCard = function(pId) {
     </div>
    </div>
    ${h2hHtml}
-   <div class="statline"><span>Pontuação Competitiva</span><strong>${totalPoints} pts</strong></div>
-   <div class="statline"><span>Retrospecto Competitivo</span><strong>${wins}V - ${losses}D (${winrate}% de Vitórias)</strong></div>
+   <div class="statline"><span>Pontuação (${rankingMode === 'casual' ? 'Casual' : 'Competitiva'})</span><strong>${totalPoints} pts</strong></div>
+   <div class="statline"><span>Retrospecto</span><strong>${wins}V - ${losses}D (${winrate}% de Vitórias)</strong></div>
    <h4 style="margin:16px 0 8px;font-size:13px">🏆 Títulos</h4>
    <div style="display:flex;flex-wrap:wrap;gap:6px">
     ${targetData.titles.length ? targetData.titles.map(t=>`<span class="badge-title" style="font-size:11px;padding:4px 8px">${esc(t)}</span>`).join("") : '<span class="muted" style="font-size:12px">Nenhum título.</span>'}
@@ -757,7 +785,9 @@ function renderRanking(){
  
  let rawRanked = players.filter(p => p.is_active !== false && (p.display_name+" "+(p.deck_name||"")+" "+(p.deck_card||"")).toLowerCase().includes(q)).map(p=>{
   let modeMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode && (m.player1_id === p.id || m.player2_id === p.id));
-  if(activeSeasonId !== "all") {
+  if(activeSeasonId === "active" && activeSeasonObj) {
+   modeMatches = modeMatches.filter(m => m.season_id === activeSeasonObj.id);
+  } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
    modeMatches = modeMatches.filter(m => m.season_id === activeSeasonId);
   }
 
@@ -839,7 +869,11 @@ function renderRanking(){
  $("statPlayers").textContent = players.filter(p => p.is_active !== false).length;
  
  let statMatchesList = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode);
- if(activeSeasonId !== "all") statMatchesList = statMatchesList.filter(m => m.season_id === activeSeasonId);
+ if(activeSeasonId === "active" && activeSeasonObj) {
+  statMatchesList = statMatchesList.filter(m => m.season_id === activeSeasonObj.id);
+ } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
+  statMatchesList = statMatchesList.filter(m => m.season_id === activeSeasonId);
+ }
  $("statMatches").textContent = statMatchesList.length;
 
  $("statLeader").textContent = rankingMode === 'competitive' ? (ranked[0]?.display_name || "—") : "Modo Casual";
@@ -847,10 +881,10 @@ function renderRanking(){
 }
 
 function renderHallOfFame() {
- $("hallFameList").innerHTML = seasons.length ? seasons.map(s => `
+ $("hallFameList").innerHTML = seasons.filter(s => s.is_active === false).length ? seasons.filter(s => s.is_active === false).map(s => `
   <div class="match" style="background:#0b1124;border-color:var(--gold)">
    <strong style="color:var(--gold);font-size:16px">🏆 ${esc(s.season_name)}</strong>
-   <p style="margin:6px 0 2px"><strong>Campeão:</strong> ${esc(s.champion_name)}</p>
+   <p style="margin:6px 0 2px"><strong>Campeão:</strong> ${esc(s.champion_name || "Nenhum campeão registrado")}</p>
    <small class="muted">Deck do Campeão: ${esc(s.champion_deck || "Não informado")} • Encerrado em: ${new Date(s.created_at).toLocaleDateString('pt-BR')}</small>
   </div>
  `).join("") : empty("Nenhuma temporada encerrada no Hall da Fama ainda.");
@@ -871,12 +905,14 @@ function matchCard(m,actions=false){
  const p2Name = playerName(m.player2_id);
  const waText = `⚔️ *Resultado Oficial - Yu-Gi-Oh!* ⚔️\n${p1Name} (${m.score1}) × (${m.score2}) ${p2Name}\n🏆 Vencedor: ${playerName(m.winner_id)}`;
 
- return `<div class="match"><div class="matchtop"><div><div style="margin-bottom:6px">${typeBadge}</div><strong>${esc(resultLabel(m))}</strong><small>${esc(m.p1_deck||deckName(m.player1_id))} × ${esc(m.p2_deck||deckName(m.player2_id))}</small><div style="margin-top:7px">${statusPill(m.status)}</div></div><span class="pill">${m.status==="approved"&&m.winner_id?pointsAwarded:"Duelo"}</span></div>${m.note?`<p class="muted" style="font-size:12px;margin:8px 0 0">${esc(m.note)}</p>p>`:""}<div class="match-actions"><button class="btn" style="padding:6px 10px;font-size:11px" onclick="copyWhatsApp(\`${waText}\`)">💬 Copiar para WhatsApp</button>${actions&&m.status==="pending_opponent"&&session&&m.player2_id===session.user.id?`<button class="primary" onclick="confirmMatch('${m.id}')">Confirmar Placar</button><button class="danger" onclick="rejectMatch('${m.id}')">Contestar</button>`:""}${actions&&isAdmin()&&["pending_admin","pending_opponent"].includes(m.status)?`<button class="primary" onclick="approveMatch('${m.id}')">Aprovar</button><button class="danger" onclick="rejectMatch('${m.id}')">Rejeitar</button>`:""}${actions&&isAdmin()?`<button class="danger" onclick="deleteMatch('${m.id}')">🗑️ Apagar</button>`:""}</div></div>`;
+ return `<div class="match"><div class="matchtop"><div><div style="margin-bottom:6px">${typeBadge}</div><strong>${esc(resultLabel(m))}</strong><small>${esc(m.p1_deck||deckName(m.player1_id))} × ${esc(m.p2_deck||deckName(m.player2_id))}</small><div style="margin-top:7px">${statusPill(m.status)}</div></div><span class="pill">${m.status==="approved"&&m.winner_id?pointsAwarded:"Duelo"}</span></div>${m.note?`<p class="muted" style="font-size:12px;margin:8px 0 0">${esc(m.note)}</p>`:""}<div class="match-actions"><button class="btn" style="padding:6px 10px;font-size:11px" onclick="copyWhatsApp(\`${waText.replace(/`/g, '\\`')}\`)">💬 Copiar para WhatsApp</button>${actions&&m.status==="pending_opponent"&&session&&m.player2_id===session.user.id?`<button class="primary" onclick="confirmMatch('${m.id}')">Confirmar Placar</button><button class="danger" onclick="rejectMatch('${m.id}')">Contestar</button>`:""}${actions&&isAdmin()&&["pending_admin","pending_opponent"].includes(m.status)?`<button class="primary" onclick="approveMatch('${m.id}')">Aprovar</button><button class="danger" onclick="rejectMatch('${m.id}')">Rejeitar</button>`:""}${actions&&isAdmin()?`<button class="danger" onclick="deleteMatch('${m.id}')">🗑️ Apagar</button>`:""}</div></div>`;
 }
 
 function renderMatches(){
  let filteredMatches = matches;
- if(activeSeasonId !== "all") {
+ if(activeSeasonId === "active" && activeSeasonObj) {
+  filteredMatches = matches.filter(m => m.season_id === activeSeasonObj.id);
+ } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
   filteredMatches = matches.filter(m => m.season_id === activeSeasonId);
  }
  let approved=filteredMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -997,11 +1033,15 @@ function renderDecks() {
 
 window.setActiveDeck = async function(deckId, dName, dCard) {
  if (!session) return;
- await sb.from("player_decks").update({ is_active: false }).eq("user_id", session.user.id);
+ const { error: errReset } = await sb.from("player_decks").update({ is_active: false }).eq("user_id", session.user.id);
+ if (errReset) return msg("Erro ao atualizar decks: " + errReset.message, "error");
+
  const { error } = await sb.from("player_decks").update({ is_active: true }).eq("id", deckId);
  if (error) return msg("Erro ao ativar deck: " + error.message, "error");
  
- await sb.from("profiles").update({ deck_name: dName, deck_card: dCard }).eq("id", session.user.id);
+ const { error: errProfile } = await sb.from("profiles").update({ deck_name: dName, deck_card: dCard }).eq("id", session.user.id);
+ if (errProfile) return msg("Deck ativado, mas houve falha ao sincronizar perfil: " + errProfile.message, "error");
+
  msg(`Deck "${dName}" definido como ativo!`, "success");
  userDecks = await fetchUserDecks();
  renderDecks();
@@ -1053,33 +1093,42 @@ function renderAdmin(){
  if(sForm) {
   sForm.onsubmit = async e => {
    e.preventDefault();
-   if(!confirm("Tem certeza que deseja encerrar a temporada atual? O líder atual será coroado no Hall da Fama e uma nova temporada será iniciada.")) return;
+   if(!confirm("Tem certeza que deseja encerrar a temporada atual? O líder atual será coroado no Hall da Fama e uma nova temporada ativa será iniciada.")) return;
    const f = new FormData(e.target);
    const seasonName = f.get("season_name");
 
-   let compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive');
-   if(activeSeasonId !== "all") compMatches = compMatches.filter(m => m.season_id === activeSeasonId);
+   if(activeSeasonObj) {
+    let compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive' && m.season_id === activeSeasonObj.id);
+    const ranked = players.map(p => {
+     const pMatches = compMatches.filter(m => m.player1_id === p.id || m.player2_id === p.id);
+     const wins = pMatches.filter(m => m.winner_id === p.id).length;
+     let points = 0;
+     pMatches.filter(m => m.winner_id === p.id).forEach(m => { points += calculateMatchPoints(m); });
+     return { ...p, wins, points };
+    }).sort((a,b)=>b.points-a.points||b.wins-a.wins);
 
-   const ranked = players.map(p => {
-    const pMatches = compMatches.filter(m => m.player1_id === p.id || m.player2_id === p.id);
-    const wins = pMatches.filter(m => m.winner_id === p.id).length;
-    let points = 0;
-    pMatches.filter(m => m.winner_id === p.id).forEach(m => { points += calculateMatchPoints(m); });
-    return { ...p, wins, points };
-   }).sort((a,b)=>b.points-a.points||b.wins-a.wins);
+    const champion = ranked[0];
+    const champName = champion && champion.points > 0 ? champion.display_name : "Nenhum campeão pontuante";
+    const champDeck = champion && champion.points > 0 ? (champion.deck_name || "Não informado") : "N/A";
 
-   const champion = ranked[0];
-   if(!champion) return msg("Não há jogadores pontuando no ranking para encerrar a temporada.","error");
+    const { error: errUpdate } = await sb.from("seasons_history").update({
+     season_name: seasonName,
+     champion_name: champName,
+     champion_deck: champDeck,
+     is_active: false
+    }).eq("id", activeSeasonObj.id);
 
-   const {data: newSeason, error} = await sb.from("seasons_history").insert({
-    season_name: seasonName,
-    champion_name: champion.display_name,
-    champion_deck: champion.deck_name || "Não informado"
-   }).select().single();
+    if(errUpdate) return msg("Erro ao fechar temporada: " + errUpdate.message, "error");
+   }
 
-   if(error) return msg("Erro ao salvar temporada: " + error.message, "error");
+   const { error: errNew } = await sb.from("seasons_history").insert({
+    season_name: "Nova Temporada Ativa",
+    is_active: true
+   });
+
+   if(errNew) return msg("Erro ao iniciar nova temporada: " + errNew.message, "error");
    
-   msg(`Temporada encerrada com sucesso! Campeão: ${champion.display_name}. Nova temporada iniciada.`, "success");
+   msg("Temporada encerrada e nova temporada iniciada com sucesso!", "success");
    sForm.reset();
    await loadData();
   };
@@ -1144,13 +1193,37 @@ async function loadData(){
  if(pe||me){msg("Não foi possível carregar os dados. Confira a configuração do Supabase. "+(pe?.message||me?.message),"error");return}
  players=pdata||[];matches=mdata||[];seasons=sdata||[];trades=tdata||[];
  
+ // Se não houver nenhuma temporada cadastrada no banco, cria uma temporada ativa padrão
+ if(seasons.length === 0 && isAdmin()) {
+  await sb.from("seasons_history").insert({ season_name: "Temporada 1", is_active: true });
+  const { data: sNew } = await sb.from("seasons_history").select("*").order("created_at",{ascending:false});
+  if(sNew) seasons = sNew;
+ }
+
+ activeSeasonObj = seasons.find(s => s.is_active === true) || seasons[0] || null;
+ if(activeSeasonId === "active" || activeSeasonId === "all") {
+  // Mantém a seleção
+ } else if(!seasons.some(s => s.id === activeSeasonId)) {
+  activeSeasonId = "active";
+ }
+
  const sel = $("seasonSelector");
  if(sel) {
-  let opts = `<option value="all">🌐 Todas as Temporadas (Geral)</option>`;
+  let opts = `<option value="active" ${activeSeasonId === 'active' ? 'selected' : ''}>⚡ Temporada Ativa</option>`;
+  opts += `<option value="all" ${activeSeasonId === 'all' ? 'selected' : ''}>🌐 Todas as Temporadas (Geral)</option>`;
   seasons.forEach(s => {
-   opts += `<option value="${s.id}" ${activeSeasonId === s.id ? 'selected' : ''}>🏆 ${esc(s.season_name)}</option>`;
+   opts += `<option value="${s.id}" ${activeSeasonId === s.id ? 'selected' : ''}>🏆 ${esc(s.season_name)} ${s.is_active ? '(Ativa)' : '(Encerrada)'}</option>`;
   });
   sel.innerHTML = opts;
+ }
+
+ if(activeSeasonId === "active") {
+  $("currentSeasonTitle").textContent = activeSeasonObj ? `Temporada Ativa: ${activeSeasonObj.season_name}` : "Temporada Ativa";
+ } else if(activeSeasonId === "all") {
+  $("currentSeasonTitle").textContent = "Ranking Geral (Todas as Temporadas)";
+ } else {
+  const sObj = seasons.find(s => s.id === activeSeasonId);
+  $("currentSeasonTitle").textContent = sObj ? `Temporada: ${sObj.season_name}` : "Ranking do Local";
  }
 
  renderRanking();renderMatches();renderHallOfFame();renderProfile();renderAdmin();
@@ -1343,7 +1416,11 @@ window.openReport = async () => {
   }
 
   let past = matches.filter(m=>m.status==="approved"&&((m.player1_id===session.user.id&&m.player2_id===oppId)||(m.player2_id===session.user.id&&m.player1_id===oppId)));
-  if(activeSeasonId !== "all") past = past.filter(m => m.season_id === activeSeasonId);
+  if(activeSeasonId === "active" && activeSeasonObj) {
+   past = past.filter(m => m.season_id === activeSeasonObj.id);
+  } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
+   past = past.filter(m => m.season_id === activeSeasonId);
+  }
   const myWins = past.filter(m=>m.winner_id===session.user.id).length;
   const oppWins = past.length-myWins;
   box.innerHTML = `<div class="notice" style="font-size:12px;margin:4px 0 10px">⚔️ <strong>Confronto Direto:</strong> ${myWins}V - ${oppWins}D (Total: ${past.length} duelos)</div>`;
@@ -1393,7 +1470,12 @@ window.openReport = async () => {
 
   const p1DeckChosen = f.get("p1_deck_chosen") || "Deck não informado";
   const p2DeckChosen = f.get("p2_deck_chosen") || "Deck não informado";
-  const currentActiveSeason = activeSeasonId !== "all" ? activeSeasonId : (seasons[0]?.id || null);
+  
+  const currentActiveSeasonId = activeSeasonObj ? activeSeasonObj.id : (seasons.find(s => s.is_active === true)?.id || seasons[0]?.id || null);
+  if(!currentActiveSeasonId) {
+   if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
+   return msg("Nenhuma temporada ativa encontrada para registrar o duelo.", "error");
+  }
 
   const { error } = await sb.from("matches").insert({
    player1_id: session.user.id,
@@ -1407,7 +1489,7 @@ window.openReport = async () => {
    match_type: matchType,
    p1_deck: p1DeckChosen,
    p2_deck: p2DeckChosen,
-   season_id: currentActiveSeason
+   season_id: currentActiveSeasonId
   });
 
   if(error){
