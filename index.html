@@ -931,7 +931,7 @@ function renderProfile(){
  if(!profileArea) return;
 
  if(!session){
-  profileArea.innerHTML=`<p class="muted">Entre ou crie uma conta para configurar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;
+  profileArea.innerHTML=`<p class="muted">Entre ou crie uma conta para gerenciar seu perfil.</p><button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;
   $("myDecksList").innerHTML=empty("Conecte a sua conta para ver os teus decks.");
   return;
  }
@@ -942,15 +942,28 @@ function renderProfile(){
   ? myData.titles.map(t=>`<option value="${esc(t)}" ${profile?.selected_title===t?"selected":""}>${esc(t)}</option>`).join("") 
   : `<option value="">Nenhum título desbloqueado ainda</option>`;
 
+ const currentAvatar = profile?.avatar_url ? profile.avatar_url : CARD_BACK_URL;
+
  profileArea.innerHTML=`
   <div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+   <div class="avatar" style="width:50px;height:50px;background-image: url('${currentAvatar}')"></div>
+   <div>
+    <strong style="font-size:15px;display:block">${esc(profile?.display_name||"Duelista")}</strong>
+    <small class="muted">Foto de perfil atual</small>
+   </div>
+  </div>
   <form id="profileForm">
    <label>Nome de duelista</label>
    <input name="display_name" maxlength="30" required value="${esc(profile?.display_name||"")}">
-   <label>Link da Imagem do Avatar (URL da internet)</label>
-   <input name="avatar_url" type="url" placeholder="https://exemplo.com/avatar.png" value="${esc(profile?.avatar_url||"")}">
+   
+   <label>📷 Foto de Perfil (Enviar do Celular/PC)</label>
+   <input type="file" id="avatarFileInput" accept="image/*" style="padding:8px">
+   <small class="muted" style="display:block;margin-top:-2px;margin-bottom:8px">Escolha uma imagem da sua galeria.</small>
+
    <label>⭐ Equipar Título Principal</label>
    <select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select>
+   
    <button class="primary" type="submit" style="margin-top:14px">Salvar Perfil</button>
   </form>
   <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
@@ -963,12 +976,13 @@ function renderProfile(){
   pForm.onsubmit=async e=>{
    e.preventDefault();
    const btnSave = pForm.querySelector('button[type="submit"]');
-   if(btnSave) { btnSave.disabled = true; btnSave.innerText = 'Salvando... ⏳'; }
+   if(btnSave) { btnSave.disabled = true; btnSave.innerText = 'Enviando... ⏳'; }
 
    const f=new FormData(e.target);
    const newName=String(f.get("display_name")||"").trim();
-   const avatarUrl=String(f.get("avatar_url")||"").trim();
    const selectedTitle=String(f.get("selected_title")||"").trim();
+   const fileInput = $("avatarFileInput");
+
    if(!newName) {
     if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
     return msg("Digite um nome de duelista.","error");
@@ -978,12 +992,39 @@ function renderProfile(){
     if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
     return msg("Esse nome de duelista já está em uso. Escolha outro.","error");
    }
-   const {error}=await sb.from("profiles").update({display_name:newName,avatar_url:avatarUrl,selected_title:selectedTitle}).eq("id",session.user.id);
+
+   let avatarUrl = profile?.avatar_url || "";
+
+   if (fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
+
+    const { data: uploadData, error: uploadError } = await sb.storage
+     .from('avatars')
+     .upload(fileName, file, { upsert: true });
+
+    if (uploadError) {
+     if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
+     return msg("Erro ao carregar imagem: " + uploadError.message + " (Certifique-se de criar o bucket 'avatars' no Supabase)", "error");
+    }
+
+    const { data: urlData } = sb.storage.from('avatars').getPublicUrl(fileName);
+    avatarUrl = urlData.publicUrl;
+   }
+
+   const {error}=await sb.from("profiles").update({
+    display_name: newName,
+    avatar_url: avatarUrl,
+    selected_title: selectedTitle
+   }).eq("id",session.user.id);
+
    if(error) {
     if(btnSave) { btnSave.disabled = false; btnSave.innerText = 'Salvar Perfil'; }
     return msg(error.message,"error");
    }
-   msg("Perfil atualizado com sucesso!","success");
+
+   msg("Perfil e foto atualizados com sucesso!","success");
    await loadData();
   };
  }
@@ -1193,7 +1234,6 @@ async function loadData(){
  if(pe||me){msg("Não foi possível carregar os dados. Confira a configuração do Supabase. "+(pe?.message||me?.message),"error");return}
  players=pdata||[];matches=mdata||[];seasons=sdata||[];trades=tdata||[];
  
- // Se não houver nenhuma temporada cadastrada no banco, cria uma temporada ativa padrão
  if(seasons.length === 0 && isAdmin()) {
   await sb.from("seasons_history").insert({ season_name: "Temporada 1", is_active: true });
   const { data: sNew } = await sb.from("seasons_history").select("*").order("created_at",{ascending:false});
@@ -1202,7 +1242,7 @@ async function loadData(){
 
  activeSeasonObj = seasons.find(s => s.is_active === true) || seasons[0] || null;
  if(activeSeasonId === "active" || activeSeasonId === "all") {
-  // Mantém a seleção
+  // Mantém
  } else if(!seasons.some(s => s.id === activeSeasonId)) {
   activeSeasonId = "active";
  }
