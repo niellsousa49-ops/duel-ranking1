@@ -899,11 +899,12 @@ window.copyWhatsApp = function(matchText) {
 function matchCard(m,actions=false){
  const isCasual = (m.match_type||"competitive") === "casual";
  const pts = calculateMatchPoints(m);
- const typeBadge = isCasual ? `<span class="pill-type">🤝 Casual (1pt)</span>` : `<span class="pill-type" style="background:#451a03;color:#fde047;border-color:#d97706">⚔️ Competitivo (${pts}pts - ${m.duration_minutes}min)</span>`;
+ const locationBadge = `<span class="pill-type" style="background:#0f172a;color:#38bdf8;border-color:#0284c7">📍 ${esc(m.location || 'Arena Presencial')}</span>`;
+ const typeBadge = isCasual ? `${locationBadge}<span class="pill-type">🤝 Casual (1pt)</span>` : `${locationBadge}<span class="pill-type" style="background:#451a03;color:#fde047;border-color:#d97706">⚔️ Competitivo (${pts}pts - ${m.duration_minutes}min)</span>`;
  const pointsAwarded = isCasual ? `+1 ${esc(playerName(m.winner_id))}` : `+${pts} ${esc(playerName(m.winner_id))}`;
  const p1Name = playerName(m.player1_id);
  const p2Name = playerName(m.player2_id);
- const waText = `⚔️ *Resultado Oficial - Yu-Gi-Oh!* ⚔️\n${p1Name} (${m.score1}) × (${m.score2}) ${p2Name}\n🏆 Vencedor: ${playerName(m.winner_id)}`;
+ const waText = `⚔️ *Resultado Oficial - Yu-Gi-Oh!* ⚔️\n📍 Local: ${m.location || 'Arena Presencial'}\n${p1Name} (${m.score1}) × (${m.score2}) ${p2Name}\n🏆 Vencedor: ${playerName(m.winner_id)}`;
 
  return `<div class="match"><div class="matchtop"><div><div style="margin-bottom:6px">${typeBadge}</div><strong>${esc(resultLabel(m))}</strong><small>${esc(m.p1_deck||deckName(m.player1_id))} × ${esc(m.p2_deck||deckName(m.player2_id))}</small><div style="margin-top:7px">${statusPill(m.status)}</div></div><span class="pill">${m.status==="approved"&&m.winner_id?pointsAwarded:"Duelo"}</span></div>${m.note?`<p class="muted" style="font-size:12px;margin:8px 0 0">${esc(m.note)}</p>`:""}<div class="match-actions"><button class="btn" style="padding:6px 10px;font-size:11px" onclick="copyWhatsApp(\`${waText.replace(/`/g, '\\`')}\`)">💬 Copiar para WhatsApp</button>${actions&&m.status==="pending_opponent"&&session&&m.player2_id===session.user.id?`<button class="primary" onclick="confirmMatch('${m.id}')">Confirmar Placar</button><button class="danger" onclick="rejectMatch('${m.id}')">Contestar</button>`:""}${actions&&isAdmin()&&["pending_admin","pending_opponent"].includes(m.status)?`<button class="primary" onclick="approveMatch('${m.id}')">Aprovar</button><button class="danger" onclick="rejectMatch('${m.id}')">Rejeitar</button>`:""}${actions&&isAdmin()?`<button class="danger" onclick="deleteMatch('${m.id}')">🗑️ Apagar</button>`:""}</div></div>`;
 }
@@ -1399,6 +1400,13 @@ window.openReport = async () => {
      <option value="casual">🤝 Casual / Treino (1 pt)</option>
     </select>
     
+    <label>📍 Local do Duelo</label>
+    <select name="location" required>
+     <option value="Casa do Alan">🏠 Casa do Alan</option>
+     <option value="Casa do Daniel">🏠 Casa do Daniel</option>
+     <option value="Shopping Solares">🏬 Shopping Solares</option>
+    </select>
+
     <label>Oponente</label>
     <select name="opponent" id="opponentSelect" required>
      <option value="">Escolha o oponente</option>
@@ -1485,6 +1493,7 @@ window.openReport = async () => {
   const s1 = Number(f.get("score1"));
   const s2 = Number(f.get("score2"));
   const matchType = f.get("match_type");
+  const matchLocation = f.get("location");
   
   if(s1 === s2){
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
@@ -1529,7 +1538,8 @@ window.openReport = async () => {
    match_type: matchType,
    p1_deck: p1DeckChosen,
    p2_deck: p2DeckChosen,
-   season_id: currentActiveSeasonId
+   season_id: currentActiveSeasonId,
+   location: matchLocation
   });
 
   if(error){
