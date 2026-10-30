@@ -283,15 +283,16 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
   </div>
  </section>
  <section id="view-meta" class="grid hidden">
-  <div class="panel">
-   <h2>📊 Análise de Metagame Local (Meta Share & Winrates)</h2>
-   <p class="muted">Veja quais os decks mais jogados na comunidade e a taxa real de vitória de cada arquétipo.</p>
-   <div id="metaShareList" class="stack" style="margin-top:16px"></div>
-  </div>
-  <div class="panel">
-   <h2>⭐ Cartas Em Destaque Mais Usadas</h2>
-   <p class="muted">Ranking das cartas principais registadas nos decks dos duelistas.</p>
-   <div id="topCardsList" class="stack" style="margin-top:16px"></div>
+  <div class="panel" style="grid-column: 1 / -1;">
+   <div class="toolbar">
+    <h2>📊 Análise Avançada de Metagame</h2>
+    <div class="rank-switch" style="width: 300px; margin-bottom: 0;">
+     <button id="metaModeComp" class="active-mode" onclick="setMetaMode('competitive')">⚔️ Competitivo</button>
+     <button id="metaModeCas" onclick="setMetaMode('casual')">🤝 Casual</button>
+    </div>
+   </div>
+   <p class="muted" style="margin-bottom: 16px;">Consulte a taxa de aparição no meta, taxa de vitória (winrate) global dos arquétipos e o aproveitamento detalhado de cada duelista com o deck.</p>
+   <div id="metaShareList" class="stack"></div>
   </div>
  </section>
  <section id="view-hall" class="panel hidden">
@@ -375,7 +376,7 @@ const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_gGApyS1mejqARPMchPI1NA_3GgIp7X_";
 const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("COLE_AQUI") && SUPABASE_ANON_KEY.length > 30 && !SUPABASE_ANON_KEY.includes("COLE_AQUI");
 const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", activeSeasonId="active", activeSeasonObj=null, realtimeSub=null;
+let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", metaMode="competitive", activeSeasonId="active", activeSeasonObj=null, realtimeSub=null;
 const cardArtCache = {};
 const CARD_BACK_URL = 'https://images.ygoprodeck.com/images/card_back.jpg';
 const $=id=>document.getElementById(id);
@@ -515,6 +516,13 @@ window.setRankingMode = function(mode) {
  renderRanking();
 };
 
+window.setMetaMode = function(mode) {
+ metaMode = mode;
+ $("metaModeComp").classList.toggle("active-mode", mode === "competitive");
+ $("metaModeCas").classList.toggle("active-mode", mode === "casual");
+ renderMetagame();
+};
+
 window.changeSeason = function(val) {
  activeSeasonId = val;
  const sel = $("seasonSelector");
@@ -606,75 +614,82 @@ function renderTrades() {
 }
 
 function renderMetagame() {
- let approved = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === rankingMode);
+ let approved = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === metaMode);
  if(activeSeasonId === "active" && activeSeasonObj) {
   approved = approved.filter(m => m.season_id === activeSeasonObj.id);
  } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
   approved = approved.filter(m => m.season_id === activeSeasonId);
  }
+ 
  const deckStats = {};
- const cardCounts = {};
-
- players.forEach(p => {
-  if(p.deck_card) {
-   cardCounts[p.deck_card] = (cardCounts[p.deck_card] || 0) + 1;
-  }
- });
 
  approved.forEach(m => {
   const d1 = m.p1_deck || deckName(m.player1_id);
   const d2 = m.p2_deck || deckName(m.player2_id);
+  const p1 = m.player1_id;
+  const p2 = m.player2_id;
 
+  // Processar Jogador 1 e seu deck
   if (d1) {
-   if(!deckStats[d1]) deckStats[d1] = { name: d1, totalMatches: 0, wins: 0 };
+   if(!deckStats[d1]) deckStats[d1] = { name: d1, totalMatches: 0, wins: 0, pilots: {} };
    deckStats[d1].totalMatches++;
-   if (m.winner_id === m.player1_id) deckStats[d1].wins++;
+   if (m.winner_id === p1) deckStats[d1].wins++;
+
+   if(!deckStats[d1].pilots[p1]) deckStats[d1].pilots[p1] = { wins: 0, total: 0 };
+   deckStats[d1].pilots[p1].total++;
+   if (m.winner_id === p1) deckStats[d1].pilots[p1].wins++;
   }
 
-  if (d2 && d2 !== d1) {
-   if(!deckStats[d2]) deckStats[d2] = { name: d2, totalMatches: 0, wins: 0 };
+  // Processar Jogador 2 e seu deck
+  if (d2) {
+   if(!deckStats[d2]) deckStats[d2] = { name: d2, totalMatches: 0, wins: 0, pilots: {} };
    deckStats[d2].totalMatches++;
-   if (m.winner_id === m.player2_id) deckStats[d2].wins++;
-  } else if (d2 && d2 === d1) {
-   deckStats[d1].totalMatches++;
-   if (m.winner_id === m.player2_id) deckStats[d1].wins++;
+   if (m.winner_id === p2) deckStats[d2].wins++;
+
+   if(!deckStats[d2].pilots[p2]) deckStats[d2].pilots[p2] = { wins: 0, total: 0 };
+   deckStats[d2].pilots[p2].total++;
+   if (m.winner_id === p2) deckStats[d2].pilots[p2].wins++;
   }
  });
 
  const totalAllDecksPlayed = Object.values(deckStats).reduce((acc, d) => acc + d.totalMatches, 0) || 1;
  const sortedDecks = Object.values(deckStats).sort((a,b) => b.totalMatches - a.totalMatches);
- const modeLabel = rankingMode === 'casual' ? 'Casual' : 'Competitivo';
+ const modeLabel = metaMode === 'casual' ? 'Casual' : 'Competitivo';
 
  $("metaShareList").innerHTML = sortedDecks.length ? sortedDecks.map(d => {
   const share = Math.round((d.totalMatches / totalAllDecksPlayed) * 100);
   const winrate = d.totalMatches > 0 ? Math.round((d.wins / d.totalMatches) * 100) : 0;
+  
+  // Calcular pilotos e winrate por jogador com este deck
+  const pilotsHtml = Object.entries(d.pilots).map(([pId, pData]) => {
+   const pName = playerName(pId);
+   const pWinrate = pData.total > 0 ? Math.round((pData.wins / pData.total) * 100) : 0;
+   return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;background:#03050c;padding:6px 10px;border-radius:6px;margin-top:4px;border:1px solid var(--line)">
+    <span>👤 <strong>${esc(pName)}</strong> (${pData.wins}V - ${pData.total - pData.wins}D)</span>
+    <span class="pill ok">Aproveitamento: <strong>${pWinrate}%</strong></span>
+   </div>`;
+  }).join("");
+
   return `
    <div class="match">
     <div style="display:flex;justify-content:space-between;align-items:center">
-     <strong style="font-size:15px;color:var(--gold)">${esc(d.name)}</strong>
-     <span class="pill">${d.totalMatches} aparições (${share}% do Meta)</span>
+     <strong style="font-size:16px;color:var(--gold)">🃏 ${esc(d.name)}</strong>
+     <span class="pill">${d.totalMatches} aparições (${share}% do Meta ${modeLabel})</span>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:6px">
-     <span>Taxa de Vitória (Winrate): <strong style="color:var(--green)">${winrate}%</strong></span>
-     <span class="muted">${d.wins}V - ${d.totalMatches - d.wins}D</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:8px">
+     <span>Winrate Global do Arquétipo: <strong style="color:var(--green)">${winrate}%</strong></span>
+     <span class="muted">${d.wins} Vitórias / ${d.totalMatches - d.wins} Derrotas</span>
     </div>
     <div class="meta-bar-wrap">
      <div class="meta-bar-fill" style="width:${share}%"></div>
     </div>
+    <div style="margin-top:12px">
+     <small class="muted" style="font-weight:750;text-transform:uppercase;letter-spacing:1px">Pilotos e Aproveitamento com este Deck:</small>
+     <div style="margin-top:4px">${pilotsHtml}</div>
+    </div>
    </div>
   `;
  }).join("") : empty(`Nenhum duelo ${modeLabel.toLowerCase()} registrado para compor o metagame.`);
-
- const sortedCards = Object.entries(cardCounts).sort((a,b) => b[1] - a[1]);
- $("topCardsList").innerHTML = sortedCards.length ? sortedCards.map(([cardName, count]) => `
-  <div class="match" style="display:flex;align-items:center;justify-content:space-between">
-   <div>
-    <strong>${esc(cardName)}</strong>
-    <p class="muted" style="margin:2px 0 0;font-size:12px">Presente em ${count} deck(s) de duelistas</p>
-   </div>
-   <span class="pill ok">${count} Player(s)</span>
-  </div>
- `).join("") : empty("Nenhuma carta em destaque registada pelos duelistas.");
 }
 
 window.openPlayerCard = function(pId) {
