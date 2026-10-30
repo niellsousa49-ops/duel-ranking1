@@ -291,8 +291,15 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
      <button id="metaModeCas" onclick="setMetaMode('casual')">🤝 Casual</button>
     </div>
    </div>
-   <p class="muted" style="margin-bottom: 16px;">Consulte a taxa de aparição no meta, taxa de vitória (winrate) global dos arquétipos e o aproveitamento detalhado de cada duelista com o deck.</p>
-   <div id="metaShareList" class="stack"></div>
+
+   <!-- Sub-abas do Metagame -->
+   <div class="rank-switch" style="margin-top: 14px; margin-bottom: 16px;">
+    <button id="metaTabRadar" class="active-mode" onclick="setMetaTab('radar')">📡 Radar do Metagame</button>
+    <button id="metaTabMatchups" onclick="setMetaTab('matchups')">⚔️ Matriz de Matchups</button>
+    <button id="metaTabHistory" onclick="setMetaTab('history')">📈 Histórico & Evolução</button>
+   </div>
+
+   <div id="metaContentArea"></div>
   </div>
  </section>
  <section id="view-hall" class="panel hidden">
@@ -376,7 +383,7 @@ const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_gGApyS1mejqARPMchPI1NA_3GgIp7X_";
 const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("COLE_AQUI") && SUPABASE_ANON_KEY.length > 30 && !SUPABASE_ANON_KEY.includes("COLE_AQUI");
 const sb = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", metaMode="competitive", activeSeasonId="active", activeSeasonObj=null, realtimeSub=null;
+let session=null, profile=null, players=[], matches=[], seasons=[], trades=[], userDecks=[], activeTab="ranking", rankingMode="competitive", metaMode="competitive", metaTab="radar", activeSeasonId="active", activeSeasonObj=null, realtimeSub=null;
 const cardArtCache = {};
 const CARD_BACK_URL = 'https://images.ygoprodeck.com/images/card_back.jpg';
 const $=id=>document.getElementById(id);
@@ -523,6 +530,14 @@ window.setMetaMode = function(mode) {
  renderMetagame();
 };
 
+window.setMetaTab = function(t) {
+ metaTab = t;
+ $("metaTabRadar").classList.toggle("active-mode", t === 'radar');
+ $("metaTabMatchups").classList.toggle("active-mode", t === 'matchups');
+ $("metaTabHistory").classList.toggle("active-mode", t === 'history');
+ renderMetagame();
+};
+
 window.changeSeason = function(val) {
  activeSeasonId = val;
  const sel = $("seasonSelector");
@@ -621,7 +636,41 @@ function renderMetagame() {
   approved = approved.filter(m => m.season_id === activeSeasonId);
  }
  
+ const modeLabel = metaMode === 'casual' ? 'Casual' : 'Competitivo';
+
+ if (metaTab === 'radar') {
+  renderMetaRadar(approved, modeLabel);
+ } else if (metaTab === 'matchups') {
+  renderMetaMatchups(approved, modeLabel);
+ } else if (metaTab === 'history') {
+  renderMetaHistory(approved, modeLabel);
+ }
+}
+
+function renderMetaRadar(approved, modeLabel) {
  const deckStats = {};
+ // Tendências divididas temporalmente (metade mais antiga vs metade mais recente do período)
+ const sortedChronological = [...approved].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+ const midpoint = Math.floor(sortedChronological.length / 2);
+ const olderPart = sortedChronological.slice(0, midpoint);
+ const newerPart = sortedChronological.slice(midpoint);
+
+ const countPopularity = (arr) => {
+  const counts = {};
+  let total = 0;
+  arr.forEach(m => {
+   const d1 = m.p1_deck || deckName(m.player1_id);
+   const d2 = m.p2_deck || deckName(m.player2_id);
+   if(d1) { counts[d1] = (counts[d1] || 0) + 1; total++; }
+   if(d2) { counts[d2] = (counts[d2] || 0) + 1; total++; }
+  });
+  const res = {};
+  for(let d in counts) res[d] = total > 0 ? (counts[d] / total) * 100 : 0;
+  return res;
+ };
+
+ const olderPop = countPopularity(olderPart);
+ const newerPop = countPopularity(newerPart);
 
  approved.forEach(m => {
   const d1 = m.p1_deck || deckName(m.player1_id);
@@ -629,23 +678,18 @@ function renderMetagame() {
   const p1 = m.player1_id;
   const p2 = m.player2_id;
 
-  // Processar Jogador 1 e seu deck
   if (d1) {
    if(!deckStats[d1]) deckStats[d1] = { name: d1, totalMatches: 0, wins: 0, pilots: {} };
    deckStats[d1].totalMatches++;
    if (m.winner_id === p1) deckStats[d1].wins++;
-
    if(!deckStats[d1].pilots[p1]) deckStats[d1].pilots[p1] = { wins: 0, total: 0 };
    deckStats[d1].pilots[p1].total++;
    if (m.winner_id === p1) deckStats[d1].pilots[p1].wins++;
   }
-
-  // Processar Jogador 2 e seu deck
   if (d2) {
    if(!deckStats[d2]) deckStats[d2] = { name: d2, totalMatches: 0, wins: 0, pilots: {} };
    deckStats[d2].totalMatches++;
    if (m.winner_id === p2) deckStats[d2].wins++;
-
    if(!deckStats[d2].pilots[p2]) deckStats[d2].pilots[p2] = { wins: 0, total: 0 };
    deckStats[d2].pilots[p2].total++;
    if (m.winner_id === p2) deckStats[d2].pilots[p2].wins++;
@@ -654,13 +698,19 @@ function renderMetagame() {
 
  const totalAllDecksPlayed = Object.values(deckStats).reduce((acc, d) => acc + d.totalMatches, 0) || 1;
  const sortedDecks = Object.values(deckStats).sort((a,b) => b.totalMatches - a.totalMatches);
- const modeLabel = metaMode === 'casual' ? 'Casual' : 'Competitivo';
 
- $("metaShareList").innerHTML = sortedDecks.length ? sortedDecks.map(d => {
+ $("metaContentArea").innerHTML = sortedDecks.length ? sortedDecks.map(d => {
   const share = Math.round((d.totalMatches / totalAllDecksPlayed) * 100);
   const winrate = d.totalMatches > 0 ? Math.round((d.wins / d.totalMatches) * 100) : 0;
   
-  // Calcular pilotos e winrate por jogador com este deck
+  const popOld = olderPop[d.name] || 0;
+  const popNew = newerPop[d.name] || share;
+  const popDiff = Math.round(popNew - popOld);
+  
+  let trendBadge = `<span class="pill" style="background:#0f172a;color:#cbd5e1">⚖️ Estável no Meta</span>`;
+  if (popDiff > 2) trendBadge = `<span class="pill ok">📈 Em Alta (+${popDiff}%)</span>`;
+  else if (popDiff < -2) trendBadge = `<span class="pill bad">📉 Em Queda (${popDiff}%)</span>`;
+
   const pilotsHtml = Object.entries(d.pilots).map(([pId, pData]) => {
    const pName = playerName(pId);
    const pWinrate = pData.total > 0 ? Math.round((pData.wins / pData.total) * 100) : 0;
@@ -672,9 +722,12 @@ function renderMetagame() {
 
   return `
    <div class="match">
-    <div style="display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
      <strong style="font-size:16px;color:var(--gold)">🃏 ${esc(d.name)}</strong>
-     <span class="pill">${d.totalMatches} aparições (${share}% do Meta ${modeLabel})</span>
+     <div style="display:flex;gap:6px;align-items:center">
+      ${trendBadge}
+      <span class="pill">${d.totalMatches} aparições (${share}% do Meta ${modeLabel})</span>
+     </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:8px">
      <span>Winrate Global do Arquétipo: <strong style="color:var(--green)">${winrate}%</strong></span>
@@ -689,7 +742,141 @@ function renderMetagame() {
     </div>
    </div>
   `;
- }).join("") : empty(`Nenhum duelo ${modeLabel.toLowerCase()} registrado para compor o metagame.`);
+ }).join("") : empty(`Nenhum duelo ${modeLabel.toLowerCase()} registrado para compor o radar do metagame.`);
+}
+
+function renderMetaMatchups(approved, modeLabel) {
+ const deckNamesSet = new Set();
+ approved.forEach(m => {
+  const d1 = m.p1_deck || deckName(m.player1_id);
+  const d2 = m.p2_deck || deckName(m.player2_id);
+  if (d1) deckNamesSet.add(d1);
+  if (d2) deckNamesSet.add(d2);
+ });
+ const decks = Array.from(deckNamesSet).sort();
+
+ if (decks.length < 2) {
+  $("metaContentArea").innerHTML = empty("São necessários pelo menos 2 arquétipos diferentes com duelos aprovados para gerar a matriz de confrontos.");
+  return;
+ }
+
+ const matchupData = {};
+ decks.forEach(d => { matchupData[d] = {}; decks.forEach(o => { matchupData[d][o] = { wins: 0, total: 0 }; }); });
+
+ approved.forEach(m => {
+  const d1 = m.p1_deck || deckName(m.player1_id);
+  const d2 = m.p2_deck || deckName(m.player2_id);
+  if (!d1 || !d2 || d1 === d2) return;
+
+  const p1Won = m.winner_id === m.player1_id;
+
+  matchupData[d1][d2].total++;
+  matchupData[d2][d1].total++;
+
+  if (p1Won) {
+   matchupData[d1][d2].wins++;
+  } else {
+   matchupData[d2][d1].wins++;
+  }
+ });
+
+ let tableHtml = `<div class="tablewrap"><table style="font-size:13px"><thead><tr><th>Deck (Linha vs Coluna)</th>${decks.map(d=>`<th style="text-align:center">${esc(d)}</th>`).join("")}</tr></thead><tbody>`;
+
+ decks.forEach(rowDeck => {
+  tableHtml += `<tr><td style="font-weight:800;color:var(--gold)">${esc(rowDeck)}</td>`;
+  decks.forEach(colDeck => {
+   if (rowDeck === colDeck) {
+    tableHtml += `<td style="text-align:center" class="muted">—</td>`;
+   } else {
+    const stats = matchupData[rowDeck][colDeck];
+    if (stats.total === 0) {
+     tableHtml += `<td style="text-align:center" class="muted">Sem duelos</td>`;
+    } else {
+     const winrate = Math.round((stats.wins / stats.total) * 100);
+     const isInsufficient = stats.total < 3;
+     let colorStyle = winrate > 50 ? 'color:var(--green)' : (winrate < 50 ? 'color:var(--red)' : 'color:var(--gold)');
+     tableHtml += `<td style="text-align:center">
+      <strong style="${colorStyle}">${winrate}%</strong>
+      <small class="muted" style="display:block">${stats.wins}V-${stats.total - stats.wins}D (${stats.total}x)</small>
+      ${isInsufficient ? `<span style="font-size:9px;color:#fde047;display:block">⚠️ Amostra baixa</span>` : ''}
+     </td>`;
+    }
+   }
+  });
+  tableHtml += `</tr>`;
+ });
+ tableHtml += `</tbody></table></div>`;
+
+ $("metaContentArea").innerHTML = `
+  <div class="notice" style="margin-bottom:14px">💡 <strong>Como ler:</strong> As linhas representam o aproveitamento do deck da linha contra o deck da coluna. Alertas de ⚠️ Amostra baixa indicam menos de 3 confrontos registrados.</div>
+  ${tableHtml}
+ `;
+}
+
+function renderMetaHistory(approved, modeLabel) {
+ const deckStats = {};
+ const playerStats = {};
+
+ approved.forEach(m => {
+  const d1 = m.p1_deck || deckName(m.player1_id);
+  const d2 = m.p2_deck || deckName(m.player2_id);
+  const p1 = m.player1_id;
+  const p2 = m.player2_id;
+
+  if (d1) {
+   if(!deckStats[d1]) deckStats[d1] = { wins: 0, total: 0 };
+   deckStats[d1].total++;
+   if(m.winner_id === p1) deckStats[d1].wins++;
+  }
+  if (d2) {
+   if(!deckStats[d2]) deckStats[d2] = { wins: 0, total: 0 };
+   deckStats[d2].total++;
+   if(m.winner_id === p2) deckStats[d2].wins++;
+  }
+
+  if (p1) {
+   if(!playerStats[p1]) playerStats[p1] = { wins: 0, total: 0 };
+   playerStats[p1].total++;
+   if(m.winner_id === p1) playerStats[p1].wins++;
+  }
+  if (p2) {
+   if(!playerStats[p2]) playerStats[p2] = { wins: 0, total: 0 };
+   playerStats[p2].total++;
+   if(m.winner_id === p2) playerStats[p2].wins++;
+  }
+ });
+
+ const deckHistoryHtml = Object.entries(deckStats).map(([name, data]) => {
+  const wr = data.total > 0 ? Math.round((data.wins / data.total) * 100) : 0;
+  return `<div class="deck-card-item">
+   <div>
+    <strong>🃏 ${esc(name)}</strong>
+    <small class="muted">${data.wins} Vitórias / ${data.total - data.wins} Derrotas (${data.total} duelos totais)</small>
+   </div>
+   <span class="pill ok">Winrate Histórico: <strong>${wr}%</strong></span>
+  </div>`;
+ }).join("");
+
+ const playerHistoryHtml = Object.entries(playerStats).map(([pId, data]) => {
+  const name = playerName(pId);
+  const wr = data.total > 0 ? Math.round((data.wins / data.total) * 100) : 0;
+  const unlocked = getPlayerUnlockedData(pId);
+  return `<div class="deck-card-item">
+   <div>
+    <strong>👤 ${esc(name)}</strong>
+    <small class="muted">Sequência atual: 🔥 ${unlocked.streak}V • Conquistas: ${unlocked.achievements.length}</small>
+   </div>
+   <span class="pill ok">Aproveitamento: <strong>${wr}%</strong> (${data.wins}V/${data.total}D)</span>
+  </div>`;
+ }).join("");
+
+ $("metaContentArea").innerHTML = `
+  <h3 style="color:var(--gold);margin-top:0">📈 Desempenho Histórico dos Arquétipos (${modeLabel})</h3>
+  <div class="stack" style="margin-bottom:20px">${deckHistoryHtml || empty("Sem dados de decks.")}</div>
+  
+  <h3 style="color:var(--gold)">👤 Evolução e Aproveitamento dos Duelistas</h3>
+  <div class="stack">${playerHistoryHtml || empty("Sem dados de duelistas.")}</div>
+ `;
 }
 
 window.openPlayerCard = function(pId) {
@@ -711,7 +898,7 @@ window.openPlayerCard = function(pId) {
  const totalPoints = rankingMode === 'casual' ? wins : compMatches.filter(m=>m.winner_id===pId).reduce((acc, m) => acc + calculateMatchPoints(m), 0);
  const winrate = compMatches.length > 0 ? Math.round((wins / compMatches.length) * 100) : 0;
 
- let h2hHtml = `<div class="notice" style="font-size:12px;margin-bottom:14px">💡 Faça login para comparar seu histórico de duelos diretos contra este jogador!</div>`;
+ let h2hHtml = `<div class="notice" style="font-size:12px;margin-bottom:14px">💡 Faça login para comparar seu histórico de duelos diretos contra este jogador[span_0](start_span)[span_0](end_span)!</div>`;
  
  if (session) {
   const myId = session.user.id;
