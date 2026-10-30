@@ -624,7 +624,7 @@ function getPlayerUnlockedData(pId, isLeader=false){
  const titles = [];
  const achievements = [];
  const progression = getLifetimeProgress(pId);
- progression.unlockedTitles.forEach(level => titles.push(level.title));
+  // A progressão nova concede somente molduras; os títulos antigos são mantidos abaixo.
 
  if(totalMatches >= 40) titles.push("🔮 Divindade dos Fóruns");
  else if(totalMatches >= 20) titles.push("📜 Lenda Urbana do Local");
@@ -1185,12 +1185,14 @@ function renderProfile(){
 
  const currentAvatar = profile?.avatar_url ? profile.avatar_url : CARD_BACK_URL;
  const progression = myData.progression;
- const frameOptions = progression.unlockedFrames.map(fr=>`<option value="${fr.id}" ${profile?.selected_frame===fr.id?"selected":""}>${fr.name}</option>`).join("");
- const levelCards = DUEL_LEVELS.map((lvl,i)=>{
-  const unlocked=progression.wins>=lvl.wins;
-  const reward=DUEL_FRAMES.find(fr=>fr.level===i+1);
-  return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid ${unlocked?'#8b6b24':'var(--line)'};border-radius:8px;background:${unlocked?'#2b2110':'#080d1c'};margin-bottom:7px"><div><strong style="font-size:12px;color:${unlocked?'var(--gold)':'var(--muted)'}">${i+1}. ${lvl.name}</strong><small class="muted" style="display:block">${lvl.wins} vitórias aprovadas • ${unlocked?lvl.title:'Bloqueado'}${reward?' • '+reward.name:''}</small></div><span class="pill ${unlocked?'ok':'pending'}">${unlocked?'Desbloqueado':'🔒'}</span></div>`;
- }).join("");
+  const frameOptions = progression.unlockedFrames.map(fr=>`<option value="${fr.id}" ${profile?.selected_frame===fr.id?"selected":""}>${fr.name}</option>`).join("");
+  // A progressão passa a exibir exclusivamente as molduras.
+  const levelCards = DUEL_FRAMES.map(fr=>{
+   const requiredLevel = DUEL_LEVELS[fr.level-1];
+   const requiredWins = requiredLevel ? requiredLevel.wins : 0;
+   const unlocked = progression.wins >= requiredWins;
+   return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid ${unlocked?'#8b6b24':'var(--line)'};border-radius:8px;background:${unlocked?'#2b2110':'#080d1c'};margin-bottom:7px"><div><strong style="font-size:12px;color:${unlocked?'var(--gold)':'var(--muted)'}">${fr.name}</strong><small class="muted" style="display:block">${requiredWins} vitórias aprovadas • ${unlocked?'Moldura desbloqueada':'Moldura bloqueada'}</small></div><span class="pill ${unlocked?'ok':'pending'}">${unlocked?'Desbloqueada':'🔒'}</span></div>`;
+  }).join("");
  profileArea.innerHTML=`
   <div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div>
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
@@ -1216,8 +1218,8 @@ function renderProfile(){
    <button class="primary" type="submit" style="margin-top:14px">Salvar Perfil</button>
   </form>
   <div style="margin-top:20px;padding:14px;background:#080d1c;border:1px solid var(--line);border-radius:10px">
-   <h3 style="margin:0 0 6px;color:var(--gold)">🏆 Progressão de Duelista — Nível ${progression.level}/10</h3>
-   <p class="muted" style="font-size:12px;margin:0 0 10px">${progression.wins} vitórias aprovadas no histórico ${progression.next?`• Próximo nível: ${progression.next.name} (${progression.next.wins} vitórias)`:'• Progressão completa!'}</p>
+   <h3 style="margin:0 0 6px;color:var(--gold)">🖼️ Coleção de Molduras</h3>
+    <p class="muted" style="font-size:12px;margin:0 0 10px">${progression.wins} vitórias aprovadas no histórico • Molduras desbloqueadas: ${progression.unlockedFrames.length}/${DUEL_FRAMES.length}</p>
    <div style="height:8px;background:#1e293b;border-radius:20px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:${progression.progress}%;background:linear-gradient(90deg,#b7791f,#facc15)"></div></div>
    ${levelCards}
   </div>
