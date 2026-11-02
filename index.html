@@ -352,8 +352,13 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
    <div id="profileArea">
     <p class="muted">Entre na sua conta para gerenciar seu perfil.</p>
    </div>
-   <h3 style="margin-top:20px">⚔️ Meus Duelos Pessoais</h3>
-   <div id="myMatches" class="stack" style="margin-top:10px"></div>
+  </div>
+  <div class="panel" style="grid-column:1/-1">
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <div><h2 style="margin:0;border:0;padding:0">⚔️ Meus Duelos</h2><small class="muted">Histórico pessoal de partidas aprovadas e pendentes</small></div>
+    <button class="btn" id="minimizeMyMatchesBtn" style="padding:6px 12px" onclick="toggleMyMatchesMinimize()">➖ Minimizar</button>
+   </div>
+   <div id="myMatchesContentBody" style="margin-top:12px"><div id="myMatches" class="stack"></div></div>
   </div>
   <div class="panel">
    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -478,6 +483,14 @@ window.toggleDecksMinimize = function() {
  const isHidden = body.style.display === "none";
  body.style.display = isHidden ? "block" : "none";
  btn.textContent = isHidden ? "➖" : "➕";
+};
+window.toggleMyMatchesMinimize = function() {
+ const body = $("myMatchesContentBody");
+ const btn = $("minimizeMyMatchesBtn");
+ if(!body||!btn)return;
+ const isHidden = body.style.display === "none";
+ body.style.display = isHidden ? "block" : "none";
+ btn.textContent = isHidden ? "➖ Minimizar" : "➕ Expandir";
 };
 
 async function fetchCardArt(query) {
@@ -1256,7 +1269,7 @@ function matchCard(m,actions=false){
 }
 
 
-window.openEditMatch = function(id){
+window.openEditMatch = async function(id){
  if(!isAdmin()) return msg("Apenas administradores podem editar duelos.","error");
  const m=matches.find(x=>String(x.id)===String(id));
  if(!m) return msg("Duelo não encontrado.","error");
@@ -1273,13 +1286,42 @@ window.openEditMatch = function(id){
    </div>
    <label>Vencedor</label><select name="winner_id"><option value="">Sem vencedor / empate</option>${playerOptions}</select>
    <div class="formgrid"><div><label>Duração (minutos)</label><input name="duration_minutes" type="number" min="1" max="600" value="${Number(m.duration_minutes)||30}" required></div><div><label>Local</label><input name="location" value="${esc(m.location||"")}" placeholder="Local do duelo"></div></div>
-   <div class="formgrid"><div><label>Deck do duelista 1</label><input name="p1_deck" value="${esc(m.p1_deck||"")}"></div><div><label>Deck do duelista 2</label><input name="p2_deck" value="${esc(m.p2_deck||"")}"></div></div>
+   <div class="formgrid"><div><label>Deck do duelista 1</label><select name="p1_deck" id="adminP1Deck"><option value="">Carregando decks...</option></select></div><div><label>Deck do duelista 2</label><select name="p2_deck" id="adminP2Deck"><option value="">Carregando decks...</option></select></div></div>
+   <p class="muted" id="adminDeckHint" style="font-size:12px;margin-top:6px">Os decks cadastrados de cada duelista serão carregados automaticamente.</p>
    <label>Observações</label><textarea name="note" rows="3">${esc(m.note||"")}</textarea>
    <p class="noticebar">A pontuação será recalculada conforme a categoria e a duração. O status de aprovação será mantido.</p>
    <button class="primary" type="submit" style="width:100%;margin-top:14px">💾 Salvar alterações</button>
   </form>`});
  const form=$("adminEditMatchForm");
  form.elements.player1_id.value=m.player1_id; form.elements.player2_id.value=m.player2_id; form.elements.winner_id.value=m.winner_id||"";
+ const escapeOption = v => String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ async function loadAdminDeckOptions(playerId, select, currentDeck){
+  select.innerHTML='<option value="">Carregando...</option>';
+  let decks=[];
+  try {
+   const {data,error}=await sb.from("player_decks").select("deck_name,is_active,created_at").eq("user_id",playerId).order("created_at",{ascending:false});
+   if(error) console.warn("Não foi possível carregar os decks cadastrados:",error.message);
+   else decks=data||[];
+  } catch(err){ console.warn(err); }
+  const names=[...new Set(decks.map(d=>String(d.deck_name||"").trim()).filter(Boolean))];
+  // Preserve the deck already saved in the duel, even if it was later removed from the player's collection.
+  if(currentDeck && !names.includes(currentDeck)) names.unshift(currentDeck);
+  if(!names.length){
+   const fallback=deckName(playerId);
+   if(fallback && fallback!=="Deck não informado") names.push(fallback);
+  }
+  select.innerHTML=(names.length?names.map(name=>`<option value="${escapeOption(name)}">${escapeOption(name)}${decks.some(d=>d.deck_name===name&&d.is_active)?" (Ativo)":""}</option>`).join(""):'<option value="">Nenhum deck cadastrado</option>');
+  if(currentDeck && names.includes(currentDeck)) select.value=currentDeck;
+  else if(decks.some(d=>d.is_active&&d.deck_name)) select.value=decks.find(d=>d.is_active).deck_name;
+  else if(names.length) select.value=names[0];
+ }
+ const p1DeckSelect=$("adminP1Deck"),p2DeckSelect=$("adminP2Deck");
+ await Promise.all([
+  loadAdminDeckOptions(m.player1_id,p1DeckSelect,m.p1_deck||""),
+  loadAdminDeckOptions(m.player2_id,p2DeckSelect,m.p2_deck||"")
+ ]);
+ form.elements.player1_id.onchange=()=>loadAdminDeckOptions(form.elements.player1_id.value,p1DeckSelect,"");
+ form.elements.player2_id.onchange=()=>loadAdminDeckOptions(form.elements.player2_id.value,p2DeckSelect,"");
  form.onsubmit=async e=>{
   e.preventDefault(); const f=new FormData(form);
   const p1=String(f.get("player1_id")),p2=String(f.get("player2_id")),s1=Number(f.get("score1")),s2=Number(f.get("score2")),winner=String(f.get("winner_id")||""),duration=Number(f.get("duration_minutes"));
@@ -1287,11 +1329,13 @@ window.openEditMatch = function(id){
   if(![0,1,2].includes(s1)||![0,1,2].includes(s2)||s1===s2)return msg("Confira o placar MD3: use 2-0, 2-1, 0-2 ou 1-2.","error");
   if(winner!==(s1>s2?p1:p2))return msg("O vencedor precisa corresponder ao placar informado.","error");
   if(!Number.isInteger(duration)||duration<1||duration>600)return msg("Informe uma duração entre 1 e 600 minutos.","error");
-  const changes={match_type:String(f.get("match_type")),player1_id:p1,player2_id:p2,score1:s1,score2:s2,winner_id:winner,duration_minutes:duration,location:String(f.get("location")||"").trim(),p1_deck:String(f.get("p1_deck")||"").trim(),p2_deck:String(f.get("p2_deck")||"").trim(),note:String(f.get("note")||"").trim()};
+  const p1Deck=String(f.get("p1_deck")||"").trim(),p2Deck=String(f.get("p2_deck")||"").trim();
+  if(!p1Deck||!p2Deck)return msg("Selecione o deck dos dois duelistas antes de salvar.","error");
+  const changes={match_type:String(f.get("match_type")),player1_id:p1,player2_id:p2,score1:s1,score2:s2,winner_id:winner,duration_minutes:duration,location:String(f.get("location")||"").trim(),p1_deck:p1Deck,p2_deck:p2Deck,note:String(f.get("note")||"").trim()};
   const {error}=await sb.from("matches").update(changes).eq("id",id);
   if(error)return msg("Não foi possível salvar: "+error.message,"error");
-  await recordAdminAction("edit_match",`Duelo ${id}: categoria ${m.match_type||"competitive"} → ${changes.match_type}; placar ${s1}-${s2}`);
-  closeModal();msg("Duelo atualizado. Ranking e pontuação serão recalculados.","success");await loadData();
+  await recordAdminAction("edit_match",`Duelo ${id}: categoria ${m.match_type||"competitive"} → ${changes.match_type}; placar ${s1}-${s2}; decks ${p1Deck} / ${p2Deck}`);
+  closeModal();msg("Duelo atualizado. Decks, Metagame, ranking e pontuação serão atualizados.","success");await loadData();
  };
 };
 
@@ -1343,8 +1387,20 @@ function renderProfile(){
    const unlocked = progression.wins >= requiredWins;
    return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid ${unlocked?'#8b6b24':'var(--line)'};border-radius:8px;background:${unlocked?'#2b2110':'#080d1c'};margin-bottom:7px"><div><strong style="font-size:12px;color:${unlocked?'var(--gold)':'var(--muted)'}">${fr.name}</strong><small class="muted" style="display:block">${requiredWins} vitórias aprovadas • ${unlocked?'Moldura desbloqueada':'Moldura bloqueada'}</small></div><span class="pill ${unlocked?'ok':'pending'}">${unlocked?'Desbloqueada':'🔒'}</span></div>`;
   }).join("");
+ const profileMatches = filteredSeason(approvedForPlayer(session.user.id)).filter(m=>(m.match_type||"competitive")===rankingMode).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+ const profileWins = profileMatches.filter(m=>m.winner_id===session.user.id).length;
+ const profileLosses = profileMatches.length-profileWins;
+ const profileRate = profileMatches.length?Math.round(profileWins/profileMatches.length*100):0;
+ const profilePoints = rankingMode==="casual"?profileWins:profileMatches.filter(m=>m.winner_id===session.user.id).reduce((n,m)=>n+calculateMatchPoints(m),0);
+ const profileRecent = profileMatches.slice(0,10);
+ let profileStreak=0; for(const match of profileMatches){if(match.winner_id===session.user.id)profileStreak++;else break;}
+ const profileDecks={}; profileMatches.forEach(m=>{const deck=m.player1_id===session.user.id?(m.p1_deck||deckName(session.user.id)):(m.p2_deck||deckName(session.user.id));if(!profileDecks[deck])profileDecks[deck]={wins:0,total:0};profileDecks[deck].total++;if(m.winner_id===session.user.id)profileDecks[deck].wins++;});
+ const profileRanked=[...players].filter(p=>p.is_active!==false).sort((a,b)=>(b.points||0)-(a.points||0)||(b.wins||0)-(a.wins||0));
+ const profilePosition=profileRanked.findIndex(p=>p.id===session.user.id)+1;
+ const profileSummary=`<div style="margin:14px 0;padding:14px;background:#080d1c;border:1px solid var(--line);border-radius:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0;color:var(--gold)">📊 Resumo do Duelista</h3><span class="pill">${rankingMode==="casual"?"Casual":"Competitivo"} • ${activeSeasonObj?.name||"Temporada"}</span></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-top:12px"><div class="stat-card"><span>Posição</span><strong>${profilePosition||"—"}º</strong></div><div class="stat-card"><span>Duelos</span><strong>${profileMatches.length}</strong></div><div class="stat-card"><span>Vitórias / Derrotas</span><strong>${profileWins} / ${profileLosses}</strong></div><div class="stat-card"><span>Aproveitamento</span><strong>${profileRate}%</strong></div><div class="stat-card"><span>Pontos</span><strong>${profilePoints}</strong></div><div class="stat-card"><span>Sequência</span><strong>🔥 ${profileStreak}</strong></div></div><div style="margin-top:12px"><small class="muted">Últimos 10 duelos</small><div class="form-recent" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${profileRecent.map(m=>`<span class="dot-res ${m.winner_id===session.user.id?'w':'l'}" title="${new Date(m.created_at).toLocaleDateString('pt-BR')}">${m.winner_id===session.user.id?'V':'D'}</span>`).join("")||'<span class="muted">Nenhum duelo aprovado ainda.</span>'}</div></div><div style="margin-top:12px"><small class="muted">Desempenho por deck</small>${Object.entries(profileDecks).sort((a,b)=>b[1].total-a[1].total).map(([name,d])=>`<div class="deck-card-item"><strong>${esc(name)}</strong><span class="pill ok">${d.wins}V / ${d.total-d.wins}D • ${Math.round(d.wins/d.total*100)}%</span></div>`).join("")||'<p class="muted" style="font-size:12px">Sem partidas aprovadas nesta categoria/temporada.</p>'}</div></div>`;
  profileArea.innerHTML=`
   <div class="notice success">Conta conectada: ${esc(session.user.email||"")}</div>
+  ${profileSummary}
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
    <div class="avatar ${frameClass(profile?.selected_frame)}" style="width:50px;height:50px;background-image: url('${currentAvatar}')"></div>
    <div>
@@ -1429,7 +1485,8 @@ function renderProfile(){
     display_name: newName,
     avatar_url: avatarUrl,
     selected_title: selectedTitle,
-    selected_frame: selectedFrame
+    selected_frame: selectedFrame,
+    selected_badge: String(f.get("selected_badge")||"").trim()
    }).eq("id",session.user.id);
 
    if(error) {
