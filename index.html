@@ -1373,6 +1373,11 @@ function renderProfile(){
  
  const isUserLeader = (players.sort((a,b)=>b.points-a.points||b.wins-a.wins)[0]?.id === session.user.id);
  const myData = getPlayerUnlockedData(session.user.id, isUserLeader);
+ const badgeChoices = [
+  "🔥 Chama do Duelo", "⚡ Energia HERO", "👑 Rei da Arena",
+  "🛡️ Guardião", "🌟 Duelista de Elite", "🎴 Estrategista"
+ ];
+ const badgeOptions = badgeChoices.map(b=>`<option value="${esc(b)}" ${profile?.selected_badge===b?"selected":""}>${esc(b)}</option>`).join("");
  const unlockedOptions = myData.titles.length > 0 
   ? myData.titles.map(t=>`<option value="${esc(t)}" ${profile?.selected_title===t?"selected":""}>${esc(t)}</option>`).join("") 
   : `<option value="">Nenhum título desbloqueado ainda</option>`;
