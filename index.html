@@ -146,6 +146,12 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
 .quickbar button{font-size:12px;padding:7px 10px}
 kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #66521b;border-radius:4px;padding:1px 5px;background:#171306}
 .match-filter-empty{padding:18px}
+.stat-card{padding:15px;border:1px solid var(--line);border-radius:10px;background:#080d1c}
+.stat-card strong{display:block;font-size:25px;color:var(--gold);font-variant-numeric:tabular-nums}
+.stat-card span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.feed-item{padding:12px;border:1px solid var(--line);border-radius:9px;background:#080d1c}
+.global-search-wrap{display:flex;gap:8px;align-items:center;flex:1;max-width:420px}
+@media(max-width:800px){.global-search-wrap{max-width:none;width:100%}}
 @media(max-width:800px){.quickbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.quickbar button{justify-content:space-between}}
 @media(max-width:800px){.hero,.grid{grid-template-columns:1fr}.hero-card{padding:23px}.hero-side{padding:18px}.top{padding:12px 14px}main{padding:20px 13px 40px}.top-actions .hide-mobile{display:none}.panel{padding:15px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
@@ -184,9 +190,18 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
   <button class="tab" data-tab="trade">🤝 Mural de Trocas</button>
   <button class="tab" data-tab="meta">📊 Metagame</button>
   <button class="tab" data-tab="hall">📜 Hall da Fama</button>
+  <button class="tab" data-tab="stats">📈 Estatísticas</button>
+  <button class="tab" data-tab="atividade">🔔 Central</button>
   <button class="tab" data-tab="perfil">👤 Meu Perfil</button>
   <button class="tab hidden" id="adminTab" data-tab="admin">🛡️ Administração <span id="adminBadge" class="tab-badge hidden">0</span></button>
  </nav>
+ <div class="quickbar">
+  <div class="global-search-wrap"><input id="globalSearch" placeholder="🔎 Buscar duelista, deck ou duelo..." aria-label="Busca global"></div>
+  <button onclick="setTab('ranking')">🏆 Ranking <kbd>1</kbd></button>
+  <button onclick="setTab('partidas')">⚔️ Duelos <kbd>2</kbd></button>
+  <button onclick="openReport()">➕ Registrar duelo <kbd>N</kbd></button>
+  <button onclick="showShortcuts()">⌨️ Atalhos <kbd>?</kbd></button>
+ </div>
  <section id="view-ranking" class="grid">
   <div class="panel">
    <div class="table-widget">
@@ -318,6 +333,18 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
   <h2>📜 Hall da Fama — Campeões de Temporadas</h2>
   <p class="muted">Aqui ficam eternizados os maiores campeões das temporadas anteriores da nossa liga presencial.</p>
   <div id="hallFameList" class="stack" style="margin-top:16px"></div>
+ </section>
+ <section id="view-stats" class="grid hidden">
+  <div class="panel" style="grid-column:1/-1">
+   <div class="toolbar"><h2>📈 Central de Estatísticas</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="statsPlayerA" style="min-width:160px"></select><select id="statsPlayerB" style="min-width:160px"></select><button class="primary" id="comparePlayersBtn">Comparar duelistas</button></div></div>
+   <div id="statsOverview" class="grid"></div>
+   <div id="statsDecks" class="stack" style="margin-top:16px"></div>
+   <div id="statsComparison" style="margin-top:16px"></div>
+  </div>
+ </section>
+ <section id="view-atividade" class="grid hidden">
+  <div class="panel"><h2>🔔 Central de Notificações</h2><p class="muted">Acompanhe confirmações, resultados e conquistas relacionadas à sua conta.</p><div id="notificationList" class="stack"></div></div>
+  <div class="panel"><h2>⚡ Atividade recente</h2><div id="activityFeed" class="stack"></div></div>
  </section>
  <section id="view-perfil" class="grid hidden">
   <div class="panel">
@@ -517,10 +544,12 @@ function updateBadges() {
 async function setTab(tab){
  activeTab=tab;
  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
- ["ranking","partidas","lp","trade","meta","hall","perfil","admin"].forEach(t=>$("view-"+t).classList.toggle("hidden",t!==tab));
+ ["ranking","partidas","lp","trade","meta","hall","stats","atividade","perfil","admin"].forEach(t=>$("view-"+t).classList.toggle("hidden",t!==tab));
  if(tab==="admin"&&!isAdmin()) setTab("ranking");
  if(tab==="meta") renderMetagame();
  if(tab==="trade") renderTrades();
+ if(tab==="stats") renderAdvancedStats();
+ if(tab==="atividade") renderActivityCenter();
  if(tab==="perfil" && session) {
   userDecks = await fetchUserDecks();
   renderProfile();
@@ -651,6 +680,74 @@ function getPlayerUnlockedData(pId, isLeader=false){
  if(streak >= 3) achievements.push("🔥 Em Chamas (3V Seguidas)");
 
  return {streak, recent, count: approved.length, titles, achievements, progression};
+}
+
+
+function approvedForPlayer(pId){
+ return matches.filter(m=>m.status==="approved"&&(m.player1_id===pId||m.player2_id===pId));
+}
+function filteredSeason(list){
+ if(activeSeasonId==="active"&&activeSeasonObj)return list.filter(m=>sameSeasonId(m.season_id,activeSeasonObj.id));
+ if(activeSeasonId!=="all"&&activeSeasonId!=="active")return list.filter(m=>sameSeasonId(m.season_id,activeSeasonId));
+ return list;
+}
+function renderAdvancedStats(){
+ const a=$("statsPlayerA"),b=$("statsPlayerB");
+ if(!a||!b)return;
+ const oldA=a.value,oldB=b.value;
+ const opts=players.filter(p=>p.is_active!==false).map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join("");
+ a.innerHTML=opts;b.innerHTML=opts;
+ if(players.some(p=>p.id===oldA))a.value=oldA;
+ if(players.some(p=>p.id===oldB))b.value=oldB;
+ if(!a.value&&session)a.value=session.user.id;
+ if(!b.value)b.value=players.find(p=>p.id!==a.value)?.id||a.value;
+ const target=a.value?players.find(p=>p.id===a.value):null;
+ if(!target){$("statsOverview").innerHTML=empty("Ainda não há duelistas para analisar.");return;}
+ const list=filteredSeason(approvedForPlayer(target.id)).filter(m=>(m.match_type||"competitive")===rankingMode).sort((x,y)=>new Date(x.created_at)-new Date(y.created_at));
+ const wins=list.filter(m=>m.winner_id===target.id).length,losses=list.length-wins,wr=list.length?Math.round(wins/list.length*100):0;
+ const points=rankingMode==="casual"?wins:list.filter(m=>m.winner_id===target.id).reduce((n,m)=>n+calculateMatchPoints(m),0);
+ let streak=0;for(let i=list.length-1;i>=0&&list[i].winner_id===target.id;i--)streak++;
+ const recent=list.slice(-10).reverse();
+ const deckStats={};
+ list.forEach(m=>{
+  const mine=m.player1_id===target.id?(m.p1_deck||deckName(target.id)):(m.p2_deck||deckName(target.id));
+  if(!deckStats[mine])deckStats[mine]={total:0,wins:0};
+  deckStats[mine].total++;if(m.winner_id===target.id)deckStats[mine].wins++;
+ });
+ $("statsOverview").innerHTML=`
+  <div class="stat-card"><span>Duelos</span><strong>${list.length}</strong></div>
+  <div class="stat-card"><span>Vitórias / derrotas</span><strong>${wins} / ${losses}</strong></div>
+  <div class="stat-card"><span>Winrate</span><strong>${wr}%</strong></div>
+  <div class="stat-card"><span>Pontuação</span><strong>${points}</strong></div>
+  <div class="stat-card"><span>Sequência atual</span><strong>🔥 ${streak}</strong></div>
+  <div class="stat-card"><span>Últimos 10</span><strong>${recent.filter(m=>m.winner_id===target.id).length}V / ${recent.filter(m=>m.winner_id!==target.id).length}D</strong></div>`;
+ $("statsDecks").innerHTML=`<h3 style="color:var(--gold)">Desempenho por deck — ${esc(target.display_name)}</h3>`+
+  (Object.entries(deckStats).sort((x,y)=>y[1].total-x[1].total).map(([name,d])=>`<div class="deck-card-item"><strong>${esc(name)}</strong><span class="pill ok">${d.wins}V / ${d.total-d.wins}D • ${Math.round(d.wins/d.total*100)}%</span></div>`).join("")||empty("Sem partidas suficientes para estatísticas de deck."));
+ $("statsComparison").innerHTML=`<h3 style="color:var(--gold)">Forma recente</h3><div class="form-recent" style="gap:6px">${recent.map(m=>`<span class="dot-res ${m.winner_id===target.id?'w':'l'}" title="${new Date(m.created_at).toLocaleDateString('pt-BR')}">${m.winner_id===target.id?'V':'D'}</span>`).join("")||"—"}</div>`;
+}
+function compareSelectedPlayers(){
+ const idA=$("statsPlayerA")?.value,idB=$("statsPlayerB")?.value;
+ if(!idA||!idB||idA===idB)return msg("Escolha dois duelistas diferentes para comparar.","error");
+ const pA=players.find(p=>p.id===idA),pB=players.find(p=>p.id===idB);
+ const h2h=filteredSeason(matches.filter(m=>m.status==="approved"&&(m.match_type||"competitive")===rankingMode&&((m.player1_id===idA&&m.player2_id===idB)||(m.player1_id===idB&&m.player2_id===idA))));
+ const wA=h2h.filter(m=>m.winner_id===idA).length,wB=h2h.length-wA;
+ const allA=filteredSeason(approvedForPlayer(idA)).filter(m=>(m.match_type||"competitive")===rankingMode),allB=filteredSeason(approvedForPlayer(idB)).filter(m=>(m.match_type||"competitive")===rankingMode);
+ const rate=(id,arr)=>arr.length?Math.round(arr.filter(m=>m.winner_id===id).length/arr.length*100):0;
+ $("statsComparison").innerHTML=`<div class="panel" style="margin-top:12px"><h3 style="color:var(--gold)">⚔️ ${esc(pA.display_name)} vs ${esc(pB.display_name)}</h3><div class="formgrid"><div class="stat-card"><span>${esc(pA.display_name)}</span><strong>${rate(idA,allA)}%</strong><small class="muted">${allA.filter(m=>m.winner_id===idA).length} vitórias em ${allA.length} duelos</small></div><div class="stat-card"><span>${esc(pB.display_name)}</span><strong>${rate(idB,allB)}%</strong><small class="muted">${allB.filter(m=>m.winner_id===idB).length} vitórias em ${allB.length} duelos</small></div></div><div class="notice" style="margin-top:12px">Confronto direto: <strong>${wA} × ${wB}</strong> em ${h2h.length} duelos${h2h.length<3?' • Amostra pequena':''}</div></div>`;
+}
+function renderActivityCenter(){
+ if(!session){$("notificationList").innerHTML=`${empty("Entre na sua conta para ver notificações pessoais.")}<button class="primary" onclick="openAuth()">Entrar / Cadastrar</button>`;}
+ else{
+  const mine=matches.filter(m=>m.player1_id===session.user.id||m.player2_id===session.user.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const notifications=mine.slice(0,30).map(m=>{
+   const opponent=m.player1_id===session.user.id?playerName(m.player2_id):playerName(m.player1_id);
+   const status=m.status==="approved"?"Duelo aprovado":m.status==="rejected"?"Duelo contestado":m.status==="pending_opponent"?"Aguardando confirmação":"Aguardando aprovação";
+   return `<div class="feed-item"><strong>${m.status==="approved"?"✅":m.status==="rejected"?"⚠️":"⏳"} ${status}</strong><small class="muted" style="display:block">${esc(opponent)} • ${esc(resultLabel(m))} • ${new Date(m.created_at).toLocaleString("pt-BR")}</small></div>`;
+  });
+  $("notificationList").innerHTML=notifications.join("")||empty("Você ainda não tem notificações.");
+ }
+ const recent=matches.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,20);
+ $("activityFeed").innerHTML=recent.map(m=>`<div class="feed-item"><strong>⚔️ ${esc(resultLabel(m))}</strong><small class="muted" style="display:block">${statusPill(m.status)} • ${new Date(m.created_at).toLocaleString("pt-BR")}</small></div>`).join("")||empty("Nenhuma atividade recente.");
 }
 
 function renderTrades() {
@@ -1096,6 +1193,7 @@ function renderRanking(){
      <div class="avatar ${frameClass(p.selected_frame)}" style="${avatarStyle}"></div>
      <div>
       <strong>${esc(p.display_name)}${p.streak>=2 && rankingMode==='competitive'?`<span class="badge-streak">🔥 ${p.streak}V</span>`:""}</strong>
+      ${p.selected_badge?`<div class="badge-ach">${esc(p.selected_badge)}</div>`:""}
       <div>${titleHtml}</div>
      </div>
     </div>
@@ -1164,6 +1262,10 @@ function renderMatches(){
  } else if(activeSeasonId !== "all" && activeSeasonId !== "active") {
   filteredMatches = matches.filter(m => sameSeasonId(m.season_id, activeSeasonId));
  }
+ const q=($("matchSearch")?.value||"").trim().toLocaleLowerCase("pt-BR");
+ const status=$("matchStatusFilter")?.value||"all";
+ if(q) filteredMatches=filteredMatches.filter(m=>(playerName(m.player1_id)+" "+playerName(m.player2_id)+" "+(m.p1_deck||"")+" "+(m.p2_deck||"")+" "+(m.location||"")+" "+(m.note||"")).toLocaleLowerCase("pt-BR").includes(q));
+ if(status!=="all") filteredMatches=filteredMatches.filter(m=>m.status===status);
  let approved=filteredMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  $("recentMatches").innerHTML=approved.slice(0,5).map(m=>matchCard(m)).join("")||empty("Os duelos aprovados aparecerão aqui.");
  $("allMatches").innerHTML=filteredMatches.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo registrado.");
@@ -1222,6 +1324,8 @@ function renderProfile(){
    <select name="selected_title"><option value="">Nenhum (Oculto)</option>${unlockedOptions}</select>
    <label style="margin-top:10px">🖼️ Equipar Moldura</label>
    <select name="selected_frame"><option value="">Sem moldura especial</option>${frameOptions}</select>
+   <label style="margin-top:10px">🎖️ Emblema de perfil</label>
+   <select name="selected_badge"><option value="">Nenhum emblema</option>${badgeOptions}</select>
    
    <button class="primary" type="submit" style="margin-top:14px">Salvar Perfil</button>
   </form>
@@ -1368,6 +1472,10 @@ window.deleteDeck = async function(deckId) {
  await loadData();
 };
 
+async function recordAdminAction(action, details=""){
+ if(!isAdmin()||!session)return;
+ try{await sb.from("admin_audit_logs").insert({admin_id:session.user.id,action,details:String(details).slice(0,500)});}catch(e){console.warn("Audit log:",e);}
+}
 function renderAdmin(){
  if(!isAdmin()){$("adminArea").innerHTML=empty("Acesso restrito a administradores.");return}
  
@@ -1397,7 +1505,10 @@ function renderAdmin(){
   <h3 style="margin-top:24px">👥 Gestão de Contas e Desativações</h3>
   <p class="muted" style="font-size:13px;margin-bottom:12px">Como administrador, você pode desativar ou reativar contas de duelistas na comunidade.</p>
   <div class="stack">${usersListHtml}</div>
+  <h3 style="margin-top:24px">🧾 Histórico de ações administrativas</h3>
+  <div id="adminAuditList" class="stack"><div class="muted">Carregando registros...</div></div>
  `;
+ loadAdminAuditLogs();
 
  const sForm = $("seasonForm");
  if(sForm) {
@@ -1405,10 +1516,12 @@ function renderAdmin(){
    e.preventDefault();
    if(!confirm("Tem certeza que deseja encerrar a temporada atual? O líder atual será coroado no Hall da Fama e uma nova temporada ativa será iniciada.")) return;
    const f = new FormData(e.target);
-   const seasonName = f.get("season_name");
+   const seasonName = String(f.get("season_name")||"").trim();
+   if(!seasonName) return msg("Informe o nome da nova temporada.","error");
 
-   if(activeSeasonObj) {
-    let compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive' && sameSeasonId(m.season_id, activeSeasonObj.id));
+   const seasonToClose = seasons.find(s => s.is_active === true) || null;
+   if(seasonToClose) {
+    let compMatches = matches.filter(m => m.status === "approved" && (m.match_type || "competitive") === 'competitive' && sameSeasonId(m.season_id, seasonToClose.id));
     const ranked = players.map(p => {
      const pMatches = compMatches.filter(m => m.player1_id === p.id || m.player2_id === p.id);
      const wins = pMatches.filter(m => m.winner_id === p.id).length;
@@ -1422,29 +1535,36 @@ function renderAdmin(){
     const champDeck = champion && champion.points > 0 ? (champion.deck_name || "Não informado") : "N/A";
 
     const { error: errUpdate } = await sb.from("seasons_history").update({
-     season_name: seasonName,
      champion_name: champName,
      champion_deck: champDeck,
      is_active: false
-    }).eq("id", activeSeasonObj.id);
+    }).eq("id", seasonToClose.id);
 
     if(errUpdate) return msg("Erro ao fechar temporada: " + errUpdate.message, "error");
    }
 
    const { error: errNew } = await sb.from("seasons_history").insert({
-    season_name: "Nova Temporada Ativa",
+    season_name: seasonName,
+    champion_name: "A definir",
     is_active: true
    });
 
    if(errNew) return msg("Erro ao iniciar nova temporada: " + errNew.message, "error");
    
    msg("Temporada encerrada e nova temporada iniciada com sucesso!", "success");
+   await recordAdminAction("Encerramento de temporada",`Nova temporada: ${seasonName}`);
    sForm.reset();
    await loadData();
   };
  }
 }
 
+async function loadAdminAuditLogs(){
+ const box=$("adminAuditList");if(!box||!isAdmin())return;
+ const {data,error}=await sb.from("admin_audit_logs").select("*").order("created_at",{ascending:false}).limit(30);
+ if(error){box.innerHTML=empty("Histórico indisponível. Execute o SQL da atualização no Supabase.");return;}
+ box.innerHTML=(data||[]).map(x=>`<div class="feed-item"><strong>${esc(x.action)}</strong><small class="muted" style="display:block">${esc(x.details||"")} • ${new Date(x.created_at).toLocaleString("pt-BR")}</small></div>`).join("")||empty("Nenhuma ação administrativa registrada.");
+}
 window.adminToggleUser = async function(userId, currentActive) {
  if(!isAdmin()) return;
  const newState = !currentActive;
@@ -1496,7 +1616,7 @@ async function loadData(){
  $("adminTab").classList.toggle("hidden",!isAdmin());
  const [{data:pdata,error:pe},{data:mdata,error:me},{data:sdata,error:se},{data:tdata,error:te}]=await Promise.all([
   sb.from("profiles").select("*"),
-  sb.from("matches").select("*").order("created_at",{ascending:false}).limit(300),
+  sb.from("matches").select("*").order("created_at",{ascending:false}).limit(1000),
   sb.from("seasons_history").select("*").order("created_at",{ascending:false}),
   sb.from("trades").select("*").order("created_at",{ascending:false}).limit(100)
  ]);
@@ -1504,7 +1624,7 @@ async function loadData(){
  players=pdata||[];matches=mdata||[];seasons=sdata||[];trades=tdata||[];
  
  if(seasons.length === 0 && isAdmin()) {
-  await sb.from("seasons_history").insert({ season_name: "Temporada 1", is_active: true });
+  await sb.from("seasons_history").insert({ season_name: "Temporada 1", champion_name: "A definir", is_active: true });
   const { data: sNew } = await sb.from("seasons_history").select("*").order("created_at",{ascending:false});
   if(sNew) seasons = sNew;
  }
@@ -1536,6 +1656,8 @@ async function loadData(){
  }
 
  renderRanking();renderMatches();renderHallOfFame();renderProfile();renderAdmin();
+ if(activeTab==="stats") renderAdvancedStats();
+ if(activeTab==="atividade") renderActivityCenter();
  if(activeTab==="meta") renderMetagame();
  if(activeTab==="trade") renderTrades();
  updateBadges();
@@ -1639,7 +1761,7 @@ window.openAuth=()=>{if(!configured){msg("Configure o Supabase no arquivo index.
 
 window.confirmMatch=async id=>{if(!session)return openAuth();const m=matches.find(x=>x.id===id);if(!m||m.player2_id!==session.user.id)return;const {error}=await sb.from("matches").update({status:"pending_admin"}).eq("id",id);if(error)msg(error.message,"error");else msg("Placar confirmado! Aguardando aprovação do administrador.","success");await loadData()};
 window.rejectMatch=async id=>{if(!session)return;const reason=prompt("Motivo da contestação (opcional):")||"";const {error}=await sb.from("matches").update({status:"rejected",note:reason}).eq("id",id);if(error)msg(error.message,"error");else msg("Duelo contestado/rejeitado com sucesso.","success");await loadData()};
-window.approveMatch=async id=>{if(!isAdmin())return;const {error}=await sb.from("matches").update({status:"approved"}).eq("id",id);if(error)msg(error.message,"error");else msg("Duelo aprovado e contabilizado no ranking!","success");await loadData()};
+window.approveMatch=async id=>{if(!isAdmin())return;const {error}=await sb.from("matches").update({status:"approved"}).eq("id",id);if(error)msg(error.message,"error");else {msg("Duelo aprovado e contabilizado no ranking!","success");await recordAdminAction("Aprovação de duelo",`Duelo ${id}`);}await loadData()};
 window.deleteMatch=async id=>{
  if(!isAdmin())return msg("Apenas administradores podem apagar duelos.","error");
  if(!confirm("Tem certeza que deseja apagar permanentemente este duelo? Esta ação não pode ser desfeita."))return;
@@ -1830,6 +1952,8 @@ window.showShortcuts=function(){
   <div class="statline"><span>📊 Metagame</span><kbd>5</kbd></div>
   <div class="statline"><span>📜 Hall da Fama</span><kbd>6</kbd></div>
   <div class="statline"><span>👤 Meu Perfil</span><kbd>7</kbd></div>
+  <div class="statline"><span>📈 Estatísticas</span><kbd>8</kbd></div>
+  <div class="statline"><span>🔔 Central</span><kbd>9</kbd></div>
   <div class="statline"><span>➕ Registrar duelo</span><kbd>N</kbd></div>
   <div class="statline"><span>🔎 Buscar na tela atual</span><kbd>/</kbd></div>
   <div class="statline"><span>Fechar janela</span><kbd>Esc</kbd></div>
@@ -1841,7 +1965,7 @@ document.addEventListener("keydown",e=>{
  if(e.key==="Escape"){if($("modalRoot")?.innerHTML)closeModal();return;}
  if(typing||e.ctrlKey||e.metaKey||e.altKey)return;
  const key=e.key.toLowerCase();
- const tabs={"1":"ranking","2":"partidas","3":"lp","4":"trade","5":"meta","6":"hall","7":"perfil"};
+ const tabs={"1":"ranking","2":"partidas","3":"lp","4":"trade","5":"meta","6":"hall","7":"perfil","8":"stats","9":"atividade"};
  if(tabs[key]){e.preventDefault();setTab(tabs[key]);return;}
  if(key==="n"){e.preventDefault();openReport();return;}
  if(key==="?"){e.preventDefault();showShortcuts();return;}
@@ -1850,6 +1974,15 @@ document.addEventListener("keydown",e=>{
 $("loginBtn").onclick=()=>window.openAuth();$("logoutBtn").onclick=async()=>{await sb?.auth.signOut();msg("Você saiu da conta.");await loadData()};$("reportBtn").onclick=window.openReport;$("reportHero").onclick=window.openReport;$("rankSearch").addEventListener("input",renderRanking);
 $("matchSearch")?.addEventListener("input",renderMatches);
 $("matchStatusFilter")?.addEventListener("change",renderMatches);
+$("globalSearch")?.addEventListener("input",e=>{
+ const q=e.target.value.trim().toLocaleLowerCase("pt-BR");
+ if(!q){renderRanking();renderMatches();return;}
+ $("rankSearch").value=q;$("matchSearch").value=q;
+ renderRanking();renderMatches();
+ if(activeTab!=="ranking"&&activeTab!=="partidas")setTab("ranking");
+});
+$("statsPlayerA")?.addEventListener("change",renderAdvancedStats);
+$("comparePlayersBtn")?.addEventListener("click",compareSelectedPlayers);
 if(!configured){msg("Modo de configuração: conecte as credenciais do Supabase para ativar o ranking online.","error")}
 if(configured)sb.auth.onAuthStateChange(()=>setTimeout(loadData,0));
 loadData();
