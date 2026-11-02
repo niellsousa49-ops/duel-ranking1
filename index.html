@@ -1252,8 +1252,48 @@ function matchCard(m,actions=false){
  const p2Name = playerName(m.player2_id);
  const waText = `⚔️ *Resultado Oficial - Yu-Gi-Oh!* ⚔️\n📍 Local: ${m.location || 'Arena Presencial'}\n${p1Name} (${m.score1}) × (${m.score2}) ${p2Name}\n🏆 Vencedor: ${playerName(m.winner_id)}`;
 
- return `<div class="match"><div class="matchtop"><div><div style="margin-bottom:6px">${typeBadge}</div><strong>${esc(resultLabel(m))}</strong><small>${esc(m.p1_deck||deckName(m.player1_id))} × ${esc(m.p2_deck||deckName(m.player2_id))}</small><div style="margin-top:7px">${statusPill(m.status)}</div></div><span class="pill">${m.status==="approved"&&m.winner_id?pointsAwarded:"Duelo"}</span></div>${m.note?`<p class="muted" style="font-size:12px;margin:8px 0 0">${esc(m.note)}</p>`:""}<div class="match-actions"><button class="btn" style="padding:6px 10px;font-size:11px" onclick="copyWhatsApp(\`${waText.replace(/`/g, '\\`')}\`)">💬 Copiar para WhatsApp</button>${actions&&m.status==="pending_opponent"&&session&&m.player2_id===session.user.id?`<button class="primary" onclick="confirmMatch('${m.id}')">Confirmar Placar</button><button class="danger" onclick="rejectMatch('${m.id}')">Contestar</button>`:""}${actions&&isAdmin()&&["pending_admin","pending_opponent"].includes(m.status)?`<button class="primary" onclick="approveMatch('${m.id}')">Aprovar</button><button class="danger" onclick="rejectMatch('${m.id}')">Rejeitar</button>`:""}${actions&&isAdmin()?`<button class="danger" onclick="deleteMatch('${m.id}')">🗑️ Apagar</button>`:""}</div></div>`;
+ return `<div class="match"><div class="matchtop"><div><div style="margin-bottom:6px">${typeBadge}</div><strong>${esc(resultLabel(m))}</strong><small>${esc(m.p1_deck||deckName(m.player1_id))} × ${esc(m.p2_deck||deckName(m.player2_id))}</small><div style="margin-top:7px">${statusPill(m.status)}</div></div><span class="pill">${m.status==="approved"&&m.winner_id?pointsAwarded:"Duelo"}</span></div>${m.note?`<p class="muted" style="font-size:12px;margin:8px 0 0">${esc(m.note)}</p>`:""}<div class="match-actions"><button class="btn" style="padding:6px 10px;font-size:11px" onclick="copyWhatsApp(\`${waText.replace(/`/g, '\\`')}\`)">💬 Copiar para WhatsApp</button>${actions&&m.status==="pending_opponent"&&session&&m.player2_id===session.user.id?`<button class="primary" onclick="confirmMatch('${m.id}')">Confirmar Placar</button><button class="danger" onclick="rejectMatch('${m.id}')">Contestar</button>`:""}${actions&&isAdmin()&&["pending_admin","pending_opponent"].includes(m.status)?`<button class="primary" onclick="approveMatch('${m.id}')">Aprovar</button><button class="danger" onclick="rejectMatch('${m.id}')">Rejeitar</button>`:""}${actions&&isAdmin()?`<button onclick="openEditMatch('${m.id}')">✏️ Editar duelo</button><button class="danger" onclick="deleteMatch('${m.id}')">🗑️ Apagar</button>`:""}</div></div>`;
 }
+
+
+window.openEditMatch = function(id){
+ if(!isAdmin()) return msg("Apenas administradores podem editar duelos.","error");
+ const m=matches.find(x=>String(x.id)===String(id));
+ if(!m) return msg("Duelo não encontrado.","error");
+ const playerOptions=players.map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join("");
+ openModal({title:"Editar duelo — Administração",body:`
+  <form id="adminEditMatchForm">
+   <label>Categoria do duelo</label>
+   <select name="match_type"><option value="competitive" ${((m.match_type||"competitive")==="competitive")?"selected":""}>⚔️ Competitivo</option><option value="casual" ${m.match_type==="casual"?"selected":""}>🤝 Casual</option></select>
+   <div class="formgrid">
+    <div><label>Duelista 1</label><select name="player1_id">${playerOptions}</select></div>
+    <div><label>Duelista 2</label><select name="player2_id">${playerOptions}</select></div>
+    <div><label>Games do duelista 1</label><select name="score1">${[0,1,2].map(v=>`<option value="${v}" ${Number(m.score1)===v?"selected":""}>${v}</option>`).join("")}</select></div>
+    <div><label>Games do duelista 2</label><select name="score2">${[0,1,2].map(v=>`<option value="${v}" ${Number(m.score2)===v?"selected":""}>${v}</option>`).join("")}</select></div>
+   </div>
+   <label>Vencedor</label><select name="winner_id"><option value="">Sem vencedor / empate</option>${playerOptions}</select>
+   <div class="formgrid"><div><label>Duração (minutos)</label><input name="duration_minutes" type="number" min="1" max="600" value="${Number(m.duration_minutes)||30}" required></div><div><label>Local</label><input name="location" value="${esc(m.location||"")}" placeholder="Local do duelo"></div></div>
+   <div class="formgrid"><div><label>Deck do duelista 1</label><input name="p1_deck" value="${esc(m.p1_deck||"")}"></div><div><label>Deck do duelista 2</label><input name="p2_deck" value="${esc(m.p2_deck||"")}"></div></div>
+   <label>Observações</label><textarea name="note" rows="3">${esc(m.note||"")}</textarea>
+   <p class="noticebar">A pontuação será recalculada conforme a categoria e a duração. O status de aprovação será mantido.</p>
+   <button class="primary" type="submit" style="width:100%;margin-top:14px">💾 Salvar alterações</button>
+  </form>`});
+ const form=$("adminEditMatchForm");
+ form.elements.player1_id.value=m.player1_id; form.elements.player2_id.value=m.player2_id; form.elements.winner_id.value=m.winner_id||"";
+ form.onsubmit=async e=>{
+  e.preventDefault(); const f=new FormData(form);
+  const p1=String(f.get("player1_id")),p2=String(f.get("player2_id")),s1=Number(f.get("score1")),s2=Number(f.get("score2")),winner=String(f.get("winner_id")||""),duration=Number(f.get("duration_minutes"));
+  if(p1===p2)return msg("Um duelista não pode jogar contra si mesmo.","error");
+  if(![0,1,2].includes(s1)||![0,1,2].includes(s2)||s1===s2)return msg("Confira o placar MD3: use 2-0, 2-1, 0-2 ou 1-2.","error");
+  if(winner!==(s1>s2?p1:p2))return msg("O vencedor precisa corresponder ao placar informado.","error");
+  if(!Number.isInteger(duration)||duration<1||duration>600)return msg("Informe uma duração entre 1 e 600 minutos.","error");
+  const changes={match_type:String(f.get("match_type")),player1_id:p1,player2_id:p2,score1:s1,score2:s2,winner_id:winner,duration_minutes:duration,location:String(f.get("location")||"").trim(),p1_deck:String(f.get("p1_deck")||"").trim(),p2_deck:String(f.get("p2_deck")||"").trim(),note:String(f.get("note")||"").trim()};
+  const {error}=await sb.from("matches").update(changes).eq("id",id);
+  if(error)return msg("Não foi possível salvar: "+error.message,"error");
+  await recordAdminAction("edit_match",`Duelo ${id}: categoria ${m.match_type||"competitive"} → ${changes.match_type}; placar ${s1}-${s2}`);
+  closeModal();msg("Duelo atualizado. Ranking e pontuação serão recalculados.","success");await loadData();
+ };
+};
 
 function renderMatches(){
  let filteredMatches = matches;
