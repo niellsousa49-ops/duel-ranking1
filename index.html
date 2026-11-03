@@ -241,9 +241,9 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
     <div>① Um duelista envia o resultado do confronto presencial (MD3 válido: 2-0, 2-1, 0-2, 1-2).</div>
     <div>② O oponente confirma o placar do duelo.</div>
     <div>③ O administrador valida a pontuação final.</div>
-    <div>④ Vitórias competitivas em menos de 50 min dão 3 pontos. Acima de 50 min dão 2 pontos. Duelos casuais dão 1 ponto.</div>
+    <div>④ Competitivo: vitórias em menos de 50 min dão 3 pontos; a partir de 50 min dão 2 pontos. Casual: 1 ponto por vitória, sem controle de duração.</div>
    </div>
-   <div class="noticebar">Competitivo: 2 ou 3 pts por vitória conforme duração. Casual: 1 pt por vitória.</div>
+   <div class="noticebar">Competitivo: 2 ou 3 pts por vitória conforme duração. Casual: 1 pt por vitória, sem limite ou registro de tempo.</div>
   </div>
  </section>
  <section id="view-lp" class="grid hidden">
@@ -420,7 +420,7 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
 ">
   ⚡
 </a>
-
+<button id="floating-duel-btn" onclick="openReport()" title="Registrar duelo rapidamente" aria-label="Registrar duelo" style="position:fixed;bottom:92px;right:20px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#ca8a04,#854d0e);color:#fff;font-size:23px;border:2px solid #fde047;box-shadow:0 4px 18px rgba(250,204,21,.35);z-index:9999">⚔️</button>
 <div id="modalRoot"></div>
 <script>
 const SUPABASE_URL = "https://vpmlswigxqlwfsrkvakh.supabase.co";
@@ -1356,14 +1356,17 @@ window.openEditMatch = async function(id){
     <div><label>Games do duelista 2</label><select name="score2">${[0,1,2].map(v=>`<option value="${v}" ${Number(m.score2)===v?"selected":""}>${v}</option>`).join("")}</select></div>
    </div>
    <label>Vencedor</label><select name="winner_id"><option value="">Sem vencedor / empate</option>${playerOptions}</select>
-   <div class="formgrid"><div><label>Duração (minutos)</label><input name="duration_minutes" type="number" min="1" max="600" value="${Number(m.duration_minutes)||30}" required></div><div><label>Local</label><input name="location" value="${esc(m.location||"")}" placeholder="Local do duelo"></div></div>
+   <div class="formgrid"><div id="adminDurationWrap"><label>Duração (minutos)</label><input name="duration_minutes" type="number" min="1" max="600" value="${Number(m.duration_minutes)||30}"></div><div><label>Local</label><input name="location" value="${esc(m.location||"")}" placeholder="Local do duelo"></div></div>
    <div class="formgrid"><div><label>Deck do duelista 1</label><select name="p1_deck" id="adminP1Deck"><option value="">Carregando decks...</option></select></div><div><label>Deck do duelista 2</label><select name="p2_deck" id="adminP2Deck"><option value="">Carregando decks...</option></select></div></div>
    <p class="muted" id="adminDeckHint" style="font-size:12px;margin-top:6px">Os decks cadastrados de cada duelista serão carregados automaticamente.</p>
    <label>Observações</label><textarea name="note" rows="3">${esc(m.note||"")}</textarea>
-   <p class="noticebar">A pontuação será recalculada conforme a categoria e a duração. O status de aprovação será mantido.</p>
+   <p class="noticebar">Competitivo usa duração para calcular pontos. Casual não registra duração. O status de aprovação será mantido.</p>
    <button class="primary" type="submit" style="width:100%;margin-top:14px">💾 Salvar alterações</button>
   </form>`});
  const form=$("adminEditMatchForm");
+ const adminType=form.elements.match_type, adminDurationWrap=$("adminDurationWrap"), adminDuration=form.elements.duration_minutes;
+ const syncAdminDuration=()=>{const casual=adminType.value==="casual";adminDurationWrap.classList.toggle("hidden",casual);adminDuration.required=!casual;};
+ adminType.addEventListener("change",syncAdminDuration);syncAdminDuration();
  form.elements.player1_id.value=m.player1_id; form.elements.player2_id.value=m.player2_id; form.elements.winner_id.value=m.winner_id||"";
  const escapeOption = v => String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  async function loadAdminDeckOptions(playerId, select, currentDeck){
@@ -1395,14 +1398,14 @@ window.openEditMatch = async function(id){
  form.elements.player2_id.onchange=()=>loadAdminDeckOptions(form.elements.player2_id.value,p2DeckSelect,"");
  form.onsubmit=async e=>{
   e.preventDefault(); const f=new FormData(form);
-  const p1=String(f.get("player1_id")),p2=String(f.get("player2_id")),s1=Number(f.get("score1")),s2=Number(f.get("score2")),winner=String(f.get("winner_id")||""),duration=Number(f.get("duration_minutes"));
+  const p1=String(f.get("player1_id")),p2=String(f.get("player2_id")),s1=Number(f.get("score1")),s2=Number(f.get("score2")),winner=String(f.get("winner_id")||""),matchType=String(f.get("match_type")),duration=matchType==="casual"?null:Number(f.get("duration_minutes"));
   if(p1===p2)return msg("Um duelista não pode jogar contra si mesmo.","error");
   if(![0,1,2].includes(s1)||![0,1,2].includes(s2)||s1===s2)return msg("Confira o placar MD3: use 2-0, 2-1, 0-2 ou 1-2.","error");
   if(winner!==(s1>s2?p1:p2))return msg("O vencedor precisa corresponder ao placar informado.","error");
-  if(!Number.isInteger(duration)||duration<1||duration>600)return msg("Informe uma duração entre 1 e 600 minutos.","error");
+  if(matchType!=="casual"&&(!Number.isInteger(duration)||duration<1||duration>600))return msg("Informe uma duração entre 1 e 600 minutos.","error");
   const p1Deck=String(f.get("p1_deck")||"").trim(),p2Deck=String(f.get("p2_deck")||"").trim();
   if(!p1Deck||!p2Deck)return msg("Selecione o deck dos dois duelistas antes de salvar.","error");
-  const changes={match_type:String(f.get("match_type")),player1_id:p1,player2_id:p2,score1:s1,score2:s2,winner_id:winner,duration_minutes:duration,location:String(f.get("location")||"").trim(),p1_deck:p1Deck,p2_deck:p2Deck,note:String(f.get("note")||"").trim()};
+  const changes={match_type:matchType,player1_id:p1,player2_id:p2,score1:s1,score2:s2,winner_id:winner,duration_minutes:duration,location:String(f.get("location")||"").trim(),p1_deck:p1Deck,p2_deck:p2Deck,note:String(f.get("note")||"").trim()};
   const {error}=await sb.from("matches").update(changes).eq("id",id);
   if(error)return msg("Não foi possível salvar: "+error.message,"error");
   await recordAdminAction("edit_match",`Duelo ${id}: categoria ${m.match_type||"competitive"} → ${changes.match_type}; placar ${s1}-${s2}; decks ${p1Deck} / ${p2Deck}`);
@@ -1954,11 +1957,16 @@ window.deleteMatch=async id=>{
  await loadData();
 };
 
-window.openReport = async () => {
+window.openReport = async (prefillOpponent = "") => {
  if(!session) return openAuth();
  
  let options = players.filter(p => p.id !== session.user.id).map(p=>`<option value="${p.id}">${esc(p.display_name)}</option>`).join("");
  if(!options){msg("Ainda não há outros duelistas cadastrados.","error");return}
+ const recentOpponents=[];
+ matches.filter(m=>m.player1_id===session.user.id||m.player2_id===session.user.id)
+  .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+  .forEach(m=>{const id=m.player1_id===session.user.id?m.player2_id:m.player1_id;if(id&&!recentOpponents.some(x=>x.id===id)&&players.some(p=>p.id===id))recentOpponents.push({id,name:playerName(id)});});
+ const quickOpponentButtons=recentOpponents.slice(0,4).map(p=>`<button type="button" onclick="selectQuickOpponent('${esc(p.id)}')" style="font-size:12px;padding:7px 10px">↻ ${esc(p.name)}</button>`).join("");
 
  const { data: myDecksData } = await sb.from("player_decks").select("*").eq("user_id", session.user.id);
  let myDeckOptions = myDecksData && myDecksData.length ? myDecksData.map(d => `<option value="${esc(d.deck_name)}">${esc(d.deck_name)} ${d.is_active ? '(Ativo)' : ''}</option>`).join("") : `<option value="Deck não informado">Deck não informado</option>`;
@@ -1968,9 +1976,9 @@ window.openReport = async () => {
   body: `
    <form id="reportForm">
     <label>Categoria do Duelo</label>
-    <select name="match_type">
+    <select name="match_type" id="reportMatchType">
+     <option value="casual" selected>🤝 Casual / Treino (1 pt)</option>
      <option value="competitive">⚔️ Competitivo (2-3 pts conforme duração)</option>
-     <option value="casual">🤝 Casual / Treino (1 pt)</option>
     </select>
     
     <label>📍 Local do Duelo</label>
@@ -1985,6 +1993,7 @@ window.openReport = async () => {
      <option value="">Escolha o oponente</option>
      ${options}
     </select>
+    ${quickOpponentButtons?`<div class="noticebar" style="margin:7px 0 4px">⚡ Oponentes recentes — toque para selecionar</div><div class="quickbar" style="margin:4px 0 10px">${quickOpponentButtons}</div>`:""}
     <div id="h2hNotice" style="margin-top:6px"></div>
 
     <div class="formgrid">
@@ -2009,12 +2018,19 @@ window.openReport = async () => {
       <label>Games do Oponente</label><select name="score2"><option>0</option><option>1</option><option>2</option></select>
      </div>
     </div>
-
+    <div class="quickbar" style="margin:8px 0">
+     <button type="button" onclick="setReportScore(2,0)">2–0</button>
+     <button type="button" onclick="setReportScore(2,1)">2–1</button>
+     <button type="button" onclick="setReportScore(1,2)">1–2</button>
+     <button type="button" onclick="setReportScore(0,2)">0–2</button>
+    </div>
     <label>Quem venceu o duelo?</label>
     <select name="winner" required><option value="me">Eu</option><option value="opponent">Oponente</option></select>
     
-    <label>Duração em minutos</label>
-    <input type="number" name="duration_minutes" id="durationMinutes" min="1" max="600" required placeholder="Digite a duração em minutos">
+    <div id="durationField">
+     <label>Duração em minutos (somente competitivo)</label>
+     <input type="number" name="duration_minutes" id="durationMinutes" min="1" max="600" placeholder="Digite a duração em minutos">
+    </div>
     
     <label>Observação (opcional)</label>
     <textarea name="note" rows="2" maxlength="240" placeholder="Ex.: Rodada 3 do torneio local"></textarea>
@@ -2024,6 +2040,11 @@ window.openReport = async () => {
    </form>
   `
  });
+ const reportType=$("reportMatchType"),durationField=$("durationField"),durationInput=$("durationMinutes");
+ const syncReportDuration=()=>{const casual=reportType.value==="casual";durationField.classList.toggle("hidden",casual);durationInput.required=!casual;};
+ reportType.addEventListener("change",syncReportDuration);syncReportDuration();
+ window.selectQuickOpponent=(id)=>{const sel=$("opponentSelect");if(!sel)return;sel.value=id;sel.dispatchEvent(new Event("change"));};
+ window.setReportScore=(a,b)=>{const form=$("reportForm");if(!form)return;form.elements.score1.value=String(a);form.elements.score2.value=String(b);form.elements.winner.value=a>b?"me":"opponent";};
 
  $("opponentSelect").onchange = async e => {
   const oppId = e.target.value;
@@ -2054,6 +2075,7 @@ window.openReport = async () => {
    oppDeckSel.innerHTML = `<option value="${esc(fallbackDeck)}">${esc(fallbackDeck)}</option>`;
   }
  };
+ if(prefillOpponent && players.some(p=>p.id===prefillOpponent)) selectQuickOpponent(prefillOpponent);
 
  $("reportForm").onsubmit = async e => {
   e.preventDefault();
@@ -2084,10 +2106,24 @@ window.openReport = async () => {
    return msg("O vencedor informado não condiz com o placar de games.","error");
   }
   
-  const duration = Number(f.get("duration_minutes"));
-  if(!duration || duration < 1 || duration > 600){
+  const duration = matchType==="casual" ? null : Number(f.get("duration_minutes"));
+  if(matchType!=="casual"&&(!Number.isInteger(duration) || duration < 1 || duration > 600)){
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
-   return msg("Informe a duração em minutos (1 a 600).","error");
+   return msg("Informe a duração competitiva entre 1 e 600 minutos.","error");
+  }
+  const todayKey=new Date().toLocaleDateString("pt-BR");
+  const duplicate=matches.find(m=>{
+   if(!m.created_at||new Date(m.created_at).toLocaleDateString("pt-BR")!==todayKey)return false;
+   const samePair=(m.player1_id===session.user.id&&m.player2_id===opponent)||(m.player1_id===opponent&&m.player2_id===session.user.id);
+   if(!samePair)return false;
+   const oldMyScore=m.player1_id===session.user.id?Number(m.score1):Number(m.score2);
+   const oldOppScore=m.player1_id===session.user.id?Number(m.score2):Number(m.score1);
+   return oldMyScore===s1&&oldOppScore===s2;
+  });
+  if(duplicate){
+   const when=duplicate.created_at?new Date(duplicate.created_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
+   const proceed=confirm(`⚠️ Possível duelo duplicado!\\n\\n${playerName(duplicate.player1_id)} ${duplicate.score1} × ${duplicate.score2} ${playerName(duplicate.player2_id)} já registrou esse mesmo placar hoje${when?` às ${when}`:""}.\\n\\nDeseja registrar mesmo assim?`);
+   if(!proceed){if(btnReport){btnReport.disabled=false;btnReport.innerText="Enviar Resultado do Duelo";}return;}
   }
 
   const p1DeckChosen = f.get("p1_deck_chosen") || "Deck não informado";
@@ -2120,7 +2156,7 @@ window.openReport = async () => {
    return msg("Erro ao enviar duelo: "+error.message,"error");
   }
   closeModal();
-  msg("Duelo registrado com sucesso! O oponente precisa confirmar o placar.","success");
+  $("globalMsg").innerHTML=`<div class="notice success">Duelo registrado com sucesso! O oponente precisa confirmar o placar.<div style="margin-top:9px"><button class="primary" onclick="openReport('${esc(opponent)}')">➕ Registrar outro duelo</button></div></div>`;
   setTab("partidas");
   await loadData();
  };
