@@ -109,8 +109,16 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
 .match-folder-title{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
 .match-folder-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .match-folder-meta{display:flex;align-items:center;gap:7px;flex-shrink:0}
-.match-folder-content{display:grid;gap:9px;padding:10px}
+.match-folder-content{display:grid;gap:6px;padding:8px}
 .match-folder-content .match{margin:0}
+.match-list-item{width:100%;display:flex;align-items:center;justify-content:space-between;gap:9px;text-align:left;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:#080e1d;color:var(--text);cursor:pointer}
+.match-list-item:hover{border-color:var(--gold);background:#101a30}
+.match-list-main{min-width:0;display:flex;flex-direction:column;gap:3px}
+.match-list-main strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match-list-main small{font-size:10px;color:var(--muted)}
+.match-list-side{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.match-list-score{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap}
+.match-list-side .pill{font-size:9px;padding:3px 6px}
 
 .match{border:1px solid var(--line);border-radius:10px;padding:13px;background:#060a17;transition:all 0.2s;position:relative}
 .match:hover{border-color:var(--gold);transform:translateX(3px);box-shadow:0 0 20px rgba(250,204,21,0.15)}
@@ -273,7 +281,7 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
  </section>
  <section id="view-partidas" class="grid hidden">
   <div class="panel"><div class="toolbar"><h2>Duelos Registrados</h2><button id="reportBtn" class="primary">⚔️ Novo Duelo</button></div>
-   <p class="muted" style="font-size:12px;margin:0 0 10px">Os resultados ficam separados em pastas pelo duelista vencedor que registrou cada partida. Toque no nome para abrir o histórico.</p><div class="formgrid" style="margin-bottom:12px"><input id="matchSearch" placeholder="Buscar duelista, deck ou local…"><select id="matchStatusFilter"><option value="all">Todos os status</option><option value="approved">Aprovados</option><option value="pending_opponent">Aguardando oponente</option><option value="pending_admin">Aguardando admin</option><option value="rejected">Rejeitados</option></select></div>
+   <p class="muted" style="font-size:12px;margin:0 0 10px">Cada duelista tem uma pasta com todos os duelos de que participou. Toque no nome para abrir o histórico.</p><div class="formgrid" style="margin-bottom:12px"><input id="matchSearch" placeholder="Buscar duelista, deck ou local…"><select id="matchStatusFilter"><option value="all">Todos os status</option><option value="approved">Aprovados</option><option value="pending_opponent">Aguardando oponente</option><option value="pending_admin">Aguardando admin</option><option value="rejected">Rejeitados</option></select></div>
    <div id="allMatches" class="stack"></div></div>
   <div class="panel">
    <h2>Regras da Arena</h2>
@@ -1509,6 +1517,17 @@ window.openEditMatch = async function(id){
  };
 };
 
+window.openMatchDetails = function(id){
+ const m=matches.find(x=>String(x.id)===String(id));
+ if(!m)return msg("Duelo não encontrado.","error");
+ openModal({title:"Detalhes do duelo",body:matchCard(m,true)});
+};
+
+function compactMatchRow(m){
+ const date=m.created_at?new Date(m.created_at).toLocaleDateString("pt-BR"):"Data não informada";
+ return `<button type="button" class="match-list-item" onclick="openMatchDetails('${String(m.id).replace(/'/g,"\\'")}')"><span class="match-list-main"><strong>${esc(playerName(m.player1_id))} × ${esc(playerName(m.player2_id))}</strong><small>${esc(date)} • ${esc(m.match_type==="casual"?"Casual":"Competitivo")}</small></span><span class="match-list-side"><strong class="match-list-score">${Number(m.score1)}–${Number(m.score2)}</strong>${statusPill(m.status)}</span></button>`;
+}
+
 function renderMatches(){
  let filteredMatches = matches;
  if(activeSeasonId === "active" && activeSeasonObj) {
@@ -1525,16 +1544,16 @@ function renderMatches(){
  const sortedMatches=filteredMatches.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  const matchGroups=new Map();
  sortedMatches.forEach(m=>{
-  // O jogador que registra a partida fica em player1_id; com a regra atual, ele é o vencedor.
-  const ownerId=m.player1_id||"unknown";
-  if(!matchGroups.has(ownerId))matchGroups.set(ownerId,[]);
-  matchGroups.get(ownerId).push(m);
+  // Cada duelo aparece na pasta dos dois participantes, mesmo que só o vencedor tenha feito o registro.
+  [m.player1_id,m.player2_id].filter(Boolean).forEach(playerId=>{
+   if(!matchGroups.has(playerId))matchGroups.set(playerId,[]);
+   // Evita duplicar o mesmo duelo dentro da pasta caso os IDs coincidam ou haja dados inconsistentes.
+   if(!matchGroups.get(playerId).some(existing=>String(existing.id)===String(m.id))) matchGroups.get(playerId).push(m);
+  });
  });
  const folders=[...matchGroups.entries()].sort((a,b)=>playerName(a[0]).localeCompare(playerName(b[0]),"pt-BR"));
- $("allMatches").innerHTML=folders.length?folders.map(([ownerId,items],index)=>{
-  const approvedCount=items.filter(m=>m.status==="approved").length;
-  const pendingCount=items.filter(m=>["pending_opponent","pending_admin"].includes(m.status)).length;
-  return `<details class="match-folder"><summary><div class="match-folder-title"><strong>${esc(playerName(ownerId))}</strong></div><div class="match-folder-meta"><span class="pill">${items.length} ${items.length===1?"duelo":"duelos"}</span>${approvedCount?`<span class="pill ok">${approvedCount} aprov.</span>`:""}${pendingCount?`<span class="pill pending">${pendingCount} pend.</span>`:""}</div></summary><div class="match-folder-content">${items.map(m=>matchCard(m,true)).join("")}</div></details>`;
+ $("allMatches").innerHTML=folders.length?folders.map(([playerId,items])=>{
+  return `<details class="match-folder"><summary><div class="match-folder-title"><strong>${esc(playerName(playerId))}</strong></div><div class="match-folder-meta"><span class="pill">${items.length} ${items.length===1?"duelo":"duelos"}</span></div></summary><div class="match-folder-content">${items.map(compactMatchRow).join("")}</div></details>`;
  }).join(""):empty("Nenhum duelo registrado.");
  
  const mine=session?matches.filter(m=>m.player1_id===session.user.id||m.player2_id===session.user.id):[];
