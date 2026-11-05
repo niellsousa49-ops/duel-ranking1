@@ -101,6 +101,16 @@ tbody tr{transition:background 0.15s}tbody tr:hover{background:#ffffff08}
 .notice.error{background:#3b1119;border-color:#991b1b;color:#fca5a5}
 .notice.success{background:#063a2f;border-color:#059669;color:#6ee7b7}
 .stack{display:grid;gap:10px}
+.match-folder{border:1px solid var(--line);border-radius:11px;background:linear-gradient(145deg,#0b1122,#060a15);overflow:hidden}
+.match-folder summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;background:#0d1529;user-select:none}
+.match-folder summary::-webkit-details-marker{display:none}
+.match-folder summary:before{content:"📁";font-size:18px}
+.match-folder[open] summary{border-bottom:1px solid var(--line);background:#111b32}
+.match-folder-title{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.match-folder-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.match-folder-meta{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.match-folder-content{display:grid;gap:9px;padding:10px}
+.match-folder-content .match{margin:0}
 
 .match{border:1px solid var(--line);border-radius:10px;padding:13px;background:#060a17;transition:all 0.2s;position:relative}
 .match:hover{border-color:var(--gold);transform:translateX(3px);box-shadow:0 0 20px rgba(250,204,21,0.15)}
@@ -263,7 +273,7 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
  </section>
  <section id="view-partidas" class="grid hidden">
   <div class="panel"><div class="toolbar"><h2>Duelos Registrados</h2><button id="reportBtn" class="primary">⚔️ Novo Duelo</button></div>
-   <div class="formgrid" style="margin-bottom:12px"><input id="matchSearch" placeholder="Buscar duelista, deck ou local…"><select id="matchStatusFilter"><option value="all">Todos os status</option><option value="approved">Aprovados</option><option value="pending_opponent">Aguardando oponente</option><option value="pending_admin">Aguardando admin</option><option value="rejected">Rejeitados</option></select></div>
+   <p class="muted" style="font-size:12px;margin:0 0 10px">Os resultados ficam separados em pastas pelo duelista vencedor que registrou cada partida. Toque no nome para abrir o histórico.</p><div class="formgrid" style="margin-bottom:12px"><input id="matchSearch" placeholder="Buscar duelista, deck ou local…"><select id="matchStatusFilter"><option value="all">Todos os status</option><option value="approved">Aprovados</option><option value="pending_opponent">Aguardando oponente</option><option value="pending_admin">Aguardando admin</option><option value="rejected">Rejeitados</option></select></div>
    <div id="allMatches" class="stack"></div></div>
   <div class="panel">
    <h2>Regras da Arena</h2>
@@ -1512,7 +1522,20 @@ function renderMatches(){
  if(status!=="all") filteredMatches=filteredMatches.filter(m=>m.status===status);
  let approved=filteredMatches.filter(m=>m.status==="approved").sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  $("recentMatches").innerHTML=approved.slice(0,5).map(m=>matchCard(m)).join("")||empty("Os duelos aprovados aparecerão aqui.");
- $("allMatches").innerHTML=filteredMatches.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).map(m=>matchCard(m,true)).join("")||empty("Nenhum duelo registrado.");
+ const sortedMatches=filteredMatches.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+ const matchGroups=new Map();
+ sortedMatches.forEach(m=>{
+  // O jogador que registra a partida fica em player1_id; com a regra atual, ele é o vencedor.
+  const ownerId=m.player1_id||"unknown";
+  if(!matchGroups.has(ownerId))matchGroups.set(ownerId,[]);
+  matchGroups.get(ownerId).push(m);
+ });
+ const folders=[...matchGroups.entries()].sort((a,b)=>playerName(a[0]).localeCompare(playerName(b[0]),"pt-BR"));
+ $("allMatches").innerHTML=folders.length?folders.map(([ownerId,items],index)=>{
+  const approvedCount=items.filter(m=>m.status==="approved").length;
+  const pendingCount=items.filter(m=>["pending_opponent","pending_admin"].includes(m.status)).length;
+  return `<details class="match-folder"><summary><div class="match-folder-title"><strong>${esc(playerName(ownerId))}</strong></div><div class="match-folder-meta"><span class="pill">${items.length} ${items.length===1?"duelo":"duelos"}</span>${approvedCount?`<span class="pill ok">${approvedCount} aprov.</span>`:""}${pendingCount?`<span class="pill pending">${pendingCount} pend.</span>`:""}</div></summary><div class="match-folder-content">${items.map(m=>matchCard(m,true)).join("")}</div></details>`;
+ }).join(""):empty("Nenhum duelo registrado.");
  
  const mine=session?matches.filter(m=>m.player1_id===session.user.id||m.player2_id===session.user.id):[];
  const myMatchesEl = $("myMatches");
@@ -2098,20 +2121,17 @@ window.openReport = async (prefillOpponent = "") => {
     <div class="formgrid" style="margin-top:10px">
      <div>
       <label>Seus Games Vencidos</label>
-      <select name="score1"><option>2</option><option>1</option><option>0</option></select>
+      <select name="score1"><option value="2">2</option></select>
      </div>
      <div>
-      <label>Games do Oponente</label><select name="score2"><option>0</option><option>1</option><option>2</option></select>
+      <label>Games do Oponente</label><select name="score2"><option value="0">0</option><option value="1">1</option></select>
      </div>
     </div>
     <div class="quickbar" style="margin:8px 0">
      <button type="button" onclick="setReportScore(2,0)">2–0</button>
      <button type="button" onclick="setReportScore(2,1)">2–1</button>
-     <button type="button" onclick="setReportScore(1,2)">1–2</button>
-     <button type="button" onclick="setReportScore(0,2)">0–2</button>
     </div>
-    <label>Quem venceu o duelo?</label>
-    <select name="winner" required><option value="me">Eu</option><option value="opponent">Oponente</option></select>
+    <div class="notice" style="margin:10px 0">🏆 Você só pode registrar duelos que venceu. Para registrar uma derrota, o vencedor deverá fazer o registro pela própria conta.</div>
     
     <div id="durationField">
      <label>Duração em minutos (somente competitivo)</label>
@@ -2122,7 +2142,7 @@ window.openReport = async (prefillOpponent = "") => {
     <textarea name="note" rows="2" maxlength="240" placeholder="Ex.: Rodada 3 do torneio local"></textarea>
     
     <button class="primary" type="submit" style="margin-top:16px;width:100%">Enviar Resultado do Duelo</button>
-    <p class="noticebar">O oponente deverá confirmar o resultado antes da aprovação do administrador.</p>
+    <p class="noticebar">Somente o vencedor registra o duelo. O oponente confirma o resultado antes da aprovação do administrador.</p>
    </form>
   `
  });
@@ -2130,7 +2150,7 @@ window.openReport = async (prefillOpponent = "") => {
  const syncReportDuration=()=>{const casual=reportType.value==="casual";durationField.classList.toggle("hidden",casual);durationInput.required=!casual;};
  reportType.addEventListener("change",syncReportDuration);syncReportDuration();
  window.selectQuickOpponent=(id)=>{const sel=$("opponentSelect");if(!sel)return;sel.value=id;sel.dispatchEvent(new Event("change"));};
- window.setReportScore=(a,b)=>{const form=$("reportForm");if(!form)return;form.elements.score1.value=String(a);form.elements.score2.value=String(b);form.elements.winner.value=a>b?"me":"opponent";};
+ window.setReportScore=(a,b)=>{const form=$("reportForm");if(!form)return;if(a!==2||![0,1].includes(b))return;form.elements.score1.value=String(a);form.elements.score2.value=String(b);};
 
  $("opponentSelect").onchange = async e => {
   const oppId = e.target.value;
@@ -2170,7 +2190,7 @@ window.openReport = async (prefillOpponent = "") => {
 
   const f = new FormData(e.target);
   const opponent = f.get("opponent");
-  const winner = f.get("winner") === "me" ? session.user.id : opponent;
+  const winner = session.user.id;
   const s1 = Number(f.get("score1"));
   const s2 = Number(f.get("score2"));
   const matchType = f.get("match_type");
@@ -2178,18 +2198,16 @@ window.openReport = async (prefillOpponent = "") => {
   
   if(s1 === s2){
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
-   return msg("O placar não pode terminar empatado.","error");
+   return msg("Informe uma vitória sua com placar 2–0 ou 2–1.","error");
   }
   
-  const isValidMD3 = (s1 === 2 && (s2 === 0 || s2 === 1)) || (s2 === 2 && (s1 === 0 || s1 === 1));
-  if(!isValidMD3) {
+  if(opponent===session.user.id){
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
-   return msg("Placar inválido para MD3. Os placares permitidos são 2–0, 2–1, 0–2 ou 1–2.", "error");
+   return msg("Você não pode registrar um duelo contra si mesmo.","error");
   }
-
-  if((winner === session.user.id && s1 <= s2) || (winner === opponent && s2 <= s1)){
+  if(s1!==2 || ![0,1].includes(s2)){
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
-   return msg("O vencedor informado não condiz com o placar de games.","error");
+   return msg("Só é permitido registrar uma vitória sua. Use o placar 2–0 ou 2–1.","error");
   }
   
   const duration = matchType==="casual" ? null : Number(f.get("duration_minutes"));
@@ -2197,20 +2215,8 @@ window.openReport = async (prefillOpponent = "") => {
    if(btnReport) { btnReport.disabled = false; btnReport.innerText = 'Enviar Resultado do Duelo'; }
    return msg("Informe a duração competitiva entre 1 e 600 minutos.","error");
   }
-  const todayKey=new Date().toLocaleDateString("pt-BR");
-  const duplicate=matches.find(m=>{
-   if(!m.created_at||new Date(m.created_at).toLocaleDateString("pt-BR")!==todayKey)return false;
-   const samePair=(m.player1_id===session.user.id&&m.player2_id===opponent)||(m.player1_id===opponent&&m.player2_id===session.user.id);
-   if(!samePair)return false;
-   const oldMyScore=m.player1_id===session.user.id?Number(m.score1):Number(m.score2);
-   const oldOppScore=m.player1_id===session.user.id?Number(m.score2):Number(m.score1);
-   return oldMyScore===s1&&oldOppScore===s2;
-  });
-  if(duplicate){
-   const when=duplicate.created_at?new Date(duplicate.created_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
-   const proceed=confirm(`⚠️ Possível duelo duplicado!\\n\\n${playerName(duplicate.player1_id)} ${duplicate.score1} × ${duplicate.score2} ${playerName(duplicate.player2_id)} já registrou esse mesmo placar hoje${when?` às ${when}`:""}.\\n\\nDeseja registrar mesmo assim?`);
-   if(!proceed){if(btnReport){btnReport.disabled=false;btnReport.innerText="Enviar Resultado do Duelo";}return;}
-  }
+  // Não bloqueamos novos duelos entre os mesmos jogadores:
+  // cada partida vencida pode ser registrada normalmente.
 
   const p1DeckChosen = f.get("p1_deck_chosen") || "Deck não informado";
   const p2DeckChosen = f.get("p2_deck_chosen") || "Deck não informado";
