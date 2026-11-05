@@ -154,6 +154,8 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
 @media(max-width:800px){.global-search-wrap{max-width:none;width:100%}}
 @media(max-width:800px){.quickbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.quickbar button{justify-content:space-between}}
 @media(max-width:800px){.hero,.grid{grid-template-columns:1fr}.hero-card{padding:23px}.hero-side{padding:18px}.top{padding:12px 14px}main{padding:20px 13px 40px}.top-actions .hide-mobile{display:none}.panel{padding:15px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
+
+.dl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.dl-panel{background:#080d1c;border:1px solid var(--line);border-radius:12px;padding:16px}.dl-panel h3{color:var(--gold);margin:0 0 12px}.dl-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.dl-kpi{background:#10182d;border:1px solid var(--line);border-radius:8px;padding:10px}.dl-kpi b{display:block;color:var(--gold);font-size:21px}.dl-kpi small{color:var(--muted)}.dl-result{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}.dl-result b{color:var(--gold)}@media(max-width:760px){.dl-grid{grid-template-columns:1fr}.dl-kpis{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -191,6 +193,7 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
   <button class="tab" data-tab="meta">📊 Metagame</button>
   <button class="tab" data-tab="hall">📜 Hall da Fama</button>
   <button class="tab" data-tab="stats">📈 Estatísticas</button>
+  <button class="tab" data-tab="decklab">🧪 Laboratório de Decks</button>
   <button class="tab" data-tab="atividade">🔔 Central</button>
   <button class="tab" data-tab="perfil">👤 Meu Perfil</button>
   <button class="tab hidden" id="adminTab" data-tab="admin">🛡️ Administração <span id="adminBadge" class="tab-badge hidden">0</span></button>
@@ -380,6 +383,20 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
    </div>
   </div>
  </section>
+
+<section id="view-decklab" class="hidden">
+ <div class="panel" style="margin-bottom:16px;border-color:#8a6717"><div class="eyebrow">⚗️ Oficina de construção</div><h1 style="color:var(--gold);margin:5px 0">LABORATÓRIO DE DECKS</h1><p class="muted">Calcule a consistência do seu deck, simule mãos e compare construções.</p></div>
+ <div class="dl-grid">
+  <div class="dl-panel"><h3>⚙️ Composição</h3>
+   <div class="formgrid"><div><label>Tamanho do deck</label><input id="dl-size" type="number" min="1" max="60" value="40"></div><div><label>Mão inicial</label><input id="dl-hand" type="number" min="1" max="15" value="5"></div></div>
+   <div id="dl-counts"></div><button class="primary" style="margin-top:14px" onclick="dlCalc()">Calcular probabilidades</button><button style="margin-top:14px" onclick="dlReset()">Restaurar exemplo</button><div id="dl-msg" class="noticebar"></div>
+  </div>
+  <div class="dl-panel"><h3>📊 Resultados exatos</h3><div id="dl-summary" class="dl-kpis"></div><div id="dl-results" style="margin-top:12px" class="muted">Configure o deck e calcule.</div></div>
+  <div class="dl-panel"><h3>🎲 Simulador de mãos</h3><label>Quantidade de simulações</label><select id="dl-runs"><option value="100">100</option><option value="1000" selected>1.000</option><option value="10000">10.000</option><option value="100000">100.000</option></select><button class="primary" style="margin-top:12px" onclick="dlSim()">Simular</button><div id="dl-sim" class="muted" style="margin-top:12px">Nenhuma simulação realizada.</div></div>
+  <div class="dl-panel"><h3>🧬 Salvar e comparar versões</h3><label>Nome da versão</label><input id="dl-name" placeholder="Ex.: HERO — mais starters"><button class="primary" style="margin-top:12px" onclick="dlSave()">Salvar versão atual</button><div id="dl-versions" style="margin-top:12px"></div><button style="margin-top:12px" onclick="dlCompare()">Comparar selecionadas (até 3)</button><div id="dl-compare" style="margin-top:12px"></div></div>
+ </div>
+</section>
+
  <section id="view-admin" class="hidden">
   <div class="panel">
    <h2>🛡️ Painel de Administração</h2>
@@ -557,7 +574,7 @@ function updateBadges() {
 async function setTab(tab){
  activeTab=tab;
  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
- ["ranking","partidas","lp","trade","meta","hall","stats","atividade","perfil","admin"].forEach(t=>$("view-"+t).classList.toggle("hidden",t!==tab));
+ ["ranking","partidas","lp","trade","meta","hall","stats","decklab","atividade","perfil","admin"].forEach(t=>$("view-"+t).classList.toggle("hidden",t!==tab));
  if(tab==="admin"&&!isAdmin()) setTab("ranking");
  if(tab==="meta") renderMetagame();
  if(tab==="trade") renderTrades();
@@ -748,6 +765,40 @@ function compareSelectedPlayers(){
  const rate=(id,arr)=>arr.length?Math.round(arr.filter(m=>m.winner_id===id).length/arr.length*100):0;
  $("statsComparison").innerHTML=`<div class="panel" style="margin-top:12px"><h3 style="color:var(--gold)">⚔️ ${esc(pA.display_name)} vs ${esc(pB.display_name)}</h3><div class="formgrid"><div class="stat-card"><span>${esc(pA.display_name)}</span><strong>${rate(idA,allA)}%</strong><small class="muted">${allA.filter(m=>m.winner_id===idA).length} vitórias em ${allA.length} duelos</small></div><div class="stat-card"><span>${esc(pB.display_name)}</span><strong>${rate(idB,allB)}%</strong><small class="muted">${allB.filter(m=>m.winner_id===idB).length} vitórias em ${allB.length} duelos</small></div></div><div class="notice" style="margin-top:12px">Confronto direto: <strong>${wA} × ${wB}</strong> em ${h2h.length} duelos${h2h.length<3?' • Amostra pequena':''}</div></div>`;
 }
+
+// Laboratório de Decks: categorias exclusivas e cálculo hipergeométrico exato
+const DL_CATS=[["starter","Starters",12],["handtrap","Hand traps",11],["extender","Extenders",9],["brick","Bricks",4],["breaker","Board breakers",0],["other","Outras cartas",4]],DL_KEY="duelRankingDeckLab";
+function dlInit(){const el=$("dl-counts");if(!el)return;el.innerHTML=DL_CATS.map(([id,n,v])=>`<div class="dl-result"><label for="dl-${id}" style="flex:1;margin:0">${n}</label><input id="dl-${id}" type="number" min="0" max="60" value="${v}" style="max-width:90px" oninput="dlCalc(false)"></div>`).join("");dlCalc(false);dlRender();}
+function dlConfig(){return {size:+$("dl-size").value,hand:+$("dl-hand").value,cats:Object.fromEntries(DL_CATS.map(([id])=>[id,+$("dl-"+id).value||0]))};}
+function dlChoose(n,k){if(k<0||k>n)return 0;k=Math.min(k,n-k);let r=1;for(let i=1;i<=k;i++)r=r*(n-k+i)/i;return r;}
+function dlProb(n,k,h,N){let sum=0;for(let i=k;i<=Math.min(n,h);i++)sum+=dlChoose(n,i)*dlChoose(N-n,h-i);return sum/dlChoose(N,h);}
+function dlJoint(a,b,h,N){let sum=0;for(let i=1;i<=a;i++)for(let j=1;j<=b;j++)if(i+j<=h)sum+=dlChoose(a,i)*dlChoose(b,j)*dlChoose(N-a-b,h-i-j);return sum/dlChoose(N,h);}
+function dlCalc(){let c=dlConfig(),total=Object.values(c.cats).reduce((a,b)=>a+b,0),error=!Number.isInteger(c.size)||c.size<1||c.size>60?"Deck deve ter entre 1 e 60 cartas.":!Number.isInteger(c.hand)||c.hand<1||c.hand>c.size?"Mão inicial inválida.":total!==c.size?`As categorias somam ${total}; o deck tem ${c.size} cartas.`:"";if(error){$("dl-msg").textContent=error;$("dl-msg").className="notice error";$("dl-results").textContent="Corrija a composição.";return null;} $("dl-msg").textContent=`${total}/${c.size} cartas configuradas.`;$("dl-msg").className="notice success";let p=id=>dlProb(c.cats[id],1,c.hand,c.size),j=(a,b)=>dlJoint(c.cats[a],c.cats[b],c.hand,c.size),rows=[["Pelo menos 1 Starter",p("starter")],["2 ou mais Starters",dlProb(c.cats.starter,2,c.hand,c.size)],["Nenhum Starter",1-p("starter")],["Pelo menos 1 Hand Trap",p("handtrap")],["Pelo menos 1 Extender",p("extender")],["Pelo menos 1 Board Breaker",p("breaker")],["Pelo menos 1 Brick",p("brick")],["Starter + Extender",j("starter","extender")],["Starter + Hand Trap",j("starter","handtrap")],["Starter + Board Breaker",j("starter","breaker")],["Brick sem Starter",p("brick")-j("brick","starter")]];window.dlLast={c,rows};$("dl-summary").innerHTML=`<div class="dl-kpi"><b>${c.size}</b><small>Cartas</small></div><div class="dl-kpi"><b>${c.hand}</b><small>Mão inicial</small></div>`+DL_CATS.map(([id,n])=>`<div class="dl-kpi"><b>${c.cats[id]}</b><small>${n}</small></div>`).join("");$("dl-results").innerHTML=rows.map(([n,v])=>`<div class="dl-result"><span>${n}</span><b>${(v*100).toFixed(2)}%</b></div>`).join("")+'<p class="noticebar">Cálculo hipergeométrico exato, sem reposição. Nesta versão, as categorias são exclusivas: uma carta deve ser contada em apenas uma categoria.</p>';return window.dlLast;}
+window.dlReset=()=>{ $("dl-size").value=40;$("dl-hand").value=5;dlInit();$("dl-sim").textContent="Nenhuma simulação realizada.";};
+window.dlSim=()=>{let d=dlCalc();if(!d)return;let {c}=d,n=+$("dl-runs").value,deck=[];DL_CATS.forEach(([id])=>{for(let i=0;i<c.cats[id];i++)deck.push(id);});let hits=Object.fromEntries(DL_CATS.map(([id])=>[id,0]));for(let t=0;t<n;t++){let a=deck.slice();for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}let h=a.slice(0,c.hand);DL_CATS.forEach(([id])=>{if(h.includes(id))hits[id]++;});} $("dl-sim").innerHTML=DL_CATS.map(([id,name])=>`<div class="dl-result"><span>${name}</span><b>${(hits[id]/n*100).toFixed(2)}%</b></div>`).join("");};
+function dlVersions(){try{return JSON.parse(localStorage.getItem(DL_KEY)||"[]");}catch(e){return [];}}
+function dlRender(){let el=$("dl-versions");if(!el)return;let v=dlVersions();el.innerHTML=v.length?v.map(x=>`<div class="dl-result"><label><input type="checkbox" class="dl-check" value="${x.id}" style="width:auto"> ${String(x.name).replace(/[&<>"]/g,"")} (${x.config.size})</label><button onclick="dlLoad(${x.id})">Carregar</button><button onclick="dlDelete(${x.id})">Excluir</button></div>`).join(""):'<div class="empty">Nenhuma versão salva.</div>';}
+window.dlSave=()=>{let d=dlCalc();if(!d)return;let v=dlVersions();v.unshift({id:Date.now(),name:$("dl-name").value.trim()||"Minha construção",config:d.c});localStorage.setItem(DL_KEY,JSON.stringify(v.slice(0,20)));$("dl-name").value="";dlRender();};
+window.dlLoad=id=>{let x=dlVersions().find(v=>v.id===id);if(!x)return;$("dl-size").value=x.config.size;$("dl-hand").value=x.config.hand;DL_CATS.forEach(([k])=>$("dl-"+k).value=x.config.cats[k]);dlCalc();};
+window.dlDelete=id=>{localStorage.setItem(DL_KEY,JSON.stringify(dlVersions().filter(v=>v.id!==id)));dlRender();};
+window.dlCompare=()=>{let ids=[...document.querySelectorAll(".dl-check:checked")].slice(0,3).map(x=>+x.value),v=ids.map(id=>dlVersions().find(x=>x.id===id)).filter(Boolean);if(v.length<2){$("dl-compare").innerHTML='<div class="notice error">Selecione duas ou três versões.</div>';return;}let m=v.map(x=>({name:x.name,s:dlProb(x.config.cats.starter,1,x.config.hand,x.config.size),h:dlProb(x.config.cats.handtrap,1,x.config.hand,x.config.size),b:dlProb(x.config.cats.breaker,1,x.config.hand,x.config.size),r:dlProb(x.config.cats.brick,1,x.config.hand,x.config.size)}));$("dl-compare").innerHTML=`<div class="tablewrap"><table><thead><tr><th>Métrica</th>${m.map(x=>`<th>${x.name}</th>`).join("")}</tr></thead><tbody>${[["s","Starter"],["h","Hand Trap"],["b","Board Breaker"],["r","Brick"]].map(([k,n])=>`<tr><td>${n}</td>${m.map(x=>`<td>${(x[k]*100).toFixed(2)}%</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;};
+
+
+window.dlTestChange=()=>{
+ const before=dlCalc();if(!before)return;
+ const cat=prompt("Qual categoria deseja alterar? starter, handtrap, extender, brick, breaker ou other");
+ if(!cat||!DL_CATS.some(x=>x[0]===cat.trim()))return alert("Categoria inválida.");
+ const delta=Number(prompt("Quantas cópias deseja adicionar ou retirar? Ex.: 2 ou -2"));
+ if(!Number.isInteger(delta)||!delta)return;
+ const offset=prompt("De qual categoria deseja retirar/adicionar a mesma quantidade para manter o tamanho do deck? "+DL_CATS.filter(x=>x[0]!==cat.trim()).map(x=>x[0]).join(", "));
+ if(!offset||!DL_CATS.some(x=>x[0]===offset.trim()&&x[0]!==cat.trim()))return alert("Categoria de compensação inválida.");
+ const oldA=+$("dl-"+cat.trim()).value,oldB=+$("dl-"+offset.trim()).value;
+ $("dl-"+cat.trim()).value=oldA+delta;$("dl-"+offset.trim()).value=oldB-delta;
+ const after=dlCalc();if(!after){$("dl-"+cat.trim()).value=oldA;$("dl-"+offset.trim()).value=oldB;dlCalc();return alert("Alteração inválida: a quantidade não pode ficar negativa.");}
+ const fmt=x=>(x*100).toFixed(2)+"%";
+ $("dl-compare").innerHTML='<h3 style="color:var(--gold)">Teste de alteração</h3>'+before.rows.map((r,i)=>`<div class="dl-result"><span>${r[0]}</span><b>${fmt(r[1])} → ${fmt(after.rows[i][1])}</b></div>`).join("");
+};
+
 const PUSH_VAPID_PUBLIC_KEY = "BMKN_deXW94tjkcpqAbixwmB_XAiSN3j6PS_6C9a7_-Ew02Fmrx3vZ2Ut-QTNFB-zd6rgPLef0vSuQ3jkEUW6jQ";
 function urlBase64ToUint8Array(base64String){
  const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -2205,6 +2256,7 @@ $("comparePlayersBtn")?.addEventListener("click",compareSelectedPlayers);
 if(!configured){msg("Modo de configuração: conecte as credenciais do Supabase para ativar o ranking online.","error")}
 if(configured)sb.auth.onAuthStateChange(()=>setTimeout(loadData,0));
 loadData();
+dlInit();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
