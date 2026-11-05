@@ -155,7 +155,34 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
 @media(max-width:800px){.quickbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.quickbar button{justify-content:space-between}}
 @media(max-width:800px){.hero,.grid{grid-template-columns:1fr}.hero-card{padding:23px}.hero-side{padding:18px}.top{padding:12px 14px}main{padding:20px 13px 40px}.top-actions .hide-mobile{display:none}.panel{padding:15px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
 
-.dl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.dl-panel{background:#080d1c;border:1px solid var(--line);border-radius:12px;padding:16px}.dl-panel h3{color:var(--gold);margin:0 0 12px}.dl-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.dl-kpi{background:#10182d;border:1px solid var(--line);border-radius:8px;padding:10px}.dl-kpi b{display:block;color:var(--gold);font-size:21px}.dl-kpi small{color:var(--muted)}.dl-result{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}.dl-result b{color:var(--gold)}@media(max-width:760px){.dl-grid{grid-template-columns:1fr}.dl-kpis{grid-template-columns:repeat(2,1fr)}}
+/* Laboratório e construtor de decks */
+.decklab-shell{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.35fr);gap:14px}
+.dl-panel{background:#080d1c;border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.dl-search-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;max-height:520px;overflow:auto;margin-top:12px}
+.dl-result{background:#10182d;border:1px solid var(--line);border-radius:9px;padding:7px;text-align:center;min-width:0}
+.dl-result img{width:100%;max-width:110px;aspect-ratio:0.69;object-fit:cover;border-radius:5px}
+.dl-result strong{display:block;font-size:11px;line-height:1.25;margin:5px 0;min-height:28px}
+.dl-result button{width:100%;font-size:11px;padding:6px}
+.dl-deck-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.dl-deck-tabs button{font-size:12px;padding:7px 10px}
+.dl-deck-tabs button.active{border-color:var(--gold);color:var(--gold);background:#241d0c}
+.dl-card-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:7px;min-height:80px}
+.dl-card{position:relative;background:#10182d;border:1px solid var(--line);border-radius:7px;padding:5px;text-align:center}
+.dl-card img{width:100%;aspect-ratio:.69;object-fit:cover;border-radius:4px}
+.dl-card strong{font-size:10px;line-height:1.15;display:block;margin:4px 0;min-height:23px;overflow-wrap:anywhere}
+.dl-card .dl-remove{position:absolute;top:3px;right:3px;border:0;background:#7f1d1d;color:white;border-radius:5px;padding:2px 5px;font-size:10px}
+.dl-card .dl-role{font-size:9px;padding:3px 4px;margin:2px;border-radius:4px}
+.dl-count{color:var(--gold);font-weight:900}
+.dl-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.dl-stat{background:#10182d;border:1px solid var(--line);padding:10px;border-radius:8px}
+.dl-stat strong{display:block;color:var(--gold);font-size:19px}
+.dl-stat small{color:var(--muted);font-size:10px}
+.dl-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.dl-toolbar button{font-size:11px}
+.dl-role-row{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.dl-hint{font-size:11px;color:var(--muted);line-height:1.45}
+@media(max-width:850px){.decklab-shell{grid-template-columns:1fr}.dl-search-results{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}}
+
 </style>
 </head>
 <body>
@@ -193,7 +220,7 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
   <button class="tab" data-tab="meta">📊 Metagame</button>
   <button class="tab" data-tab="hall">📜 Hall da Fama</button>
   <button class="tab" data-tab="stats">📈 Estatísticas</button>
-  <button class="tab" data-tab="decklab">🧪 Laboratório de Decks</button>
+  <button class="tab" data-tab="decklab">🧪 Laboratório</button>
   <button class="tab" data-tab="atividade">🔔 Central</button>
   <button class="tab" data-tab="perfil">👤 Meu Perfil</button>
   <button class="tab hidden" id="adminTab" data-tab="admin">🛡️ Administração <span id="adminBadge" class="tab-badge hidden">0</span></button>
@@ -384,18 +411,60 @@ kbd{font:700 10px ui-monospace,monospace;color:var(--gold);border:1px solid #665
   </div>
  </section>
 
-<section id="view-decklab" class="hidden">
- <div class="panel" style="margin-bottom:16px;border-color:#8a6717"><div class="eyebrow">⚗️ Oficina de construção</div><h1 style="color:var(--gold);margin:5px 0">LABORATÓRIO DE DECKS</h1><p class="muted">Calcule a consistência do seu deck, simule mãos e compare construções.</p></div>
- <div class="dl-grid">
-  <div class="dl-panel"><h3>⚙️ Composição</h3>
-   <div class="formgrid"><div><label>Tamanho do deck</label><input id="dl-size" type="number" min="1" max="60" value="40"></div><div><label>Mão inicial</label><input id="dl-hand" type="number" min="1" max="15" value="5"></div></div>
-   <div id="dl-counts"></div><button class="primary" style="margin-top:14px" onclick="dlCalc()">Calcular probabilidades</button><button style="margin-top:14px" onclick="dlReset()">Restaurar exemplo</button><div id="dl-msg" class="noticebar"></div>
+ <section id="view-decklab" class="hidden">
+  <div class="panel" style="margin-bottom:14px">
+   <div class="eyebrow">⚙️ Arena de construção</div>
+   <h2 style="margin:3px 0 6px">🧪 Laboratório de Decks</h2>
+   <p class="muted" style="font-size:13px;margin:0">Monte seu deck pesquisando pelo nome das cartas. As imagens e informações são carregadas automaticamente da base YGOPRODeck.</p>
+   <div class="formgrid" style="margin-top:12px">
+    <div><label>Nome do deck</label><input id="dlDeckName" maxlength="50" placeholder="Ex: HERO"></div>
+    <div><label>Adicionar cartas em</label><select id="dlTarget"><option value="main">Main Deck</option><option value="extra">Extra Deck</option><option value="side">Side Deck</option></select></div>
+   </div>
   </div>
-  <div class="dl-panel"><h3>📊 Resultados exatos</h3><div id="dl-summary" class="dl-kpis"></div><div id="dl-results" style="margin-top:12px" class="muted">Configure o deck e calcule.</div></div>
-  <div class="dl-panel"><h3>🎲 Simulador de mãos</h3><label>Quantidade de simulações</label><select id="dl-runs"><option value="100">100</option><option value="1000" selected>1.000</option><option value="10000">10.000</option><option value="100000">100.000</option></select><button class="primary" style="margin-top:12px" onclick="dlSim()">Simular</button><div id="dl-sim" class="muted" style="margin-top:12px">Nenhuma simulação realizada.</div></div>
-  <div class="dl-panel"><h3>🧬 Salvar e comparar versões</h3><label>Nome da versão</label><input id="dl-name" placeholder="Ex.: HERO — mais starters"><button class="primary" style="margin-top:12px" onclick="dlSave()">Salvar versão atual</button><div id="dl-versions" style="margin-top:12px"></div><button style="margin-top:12px" onclick="dlCompare()">Comparar selecionadas (até 3)</button><div id="dl-compare" style="margin-top:12px"></div></div>
- </div>
-</section>
+  <div class="decklab-shell">
+   <div class="dl-panel">
+    <h3 style="color:var(--gold);margin:0 0 8px">🔎 Pesquisar cartas</h3>
+    <input id="dlSearch" placeholder="Digite o nome da carta..." autocomplete="off">
+    <p class="dl-hint">Pesquise em inglês ou pelo nome oficial. Toque em uma carta para adicioná-la ao deck selecionado. A pesquisa precisa de conexão com a internet.</p>
+    <div id="dlSearchStatus" class="muted" style="font-size:11px;margin-top:8px">Digite para pesquisar cartas.</div>
+    <div id="dlSearchResults" class="dl-search-results"></div>
+    <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+     <h3 style="color:var(--gold);margin:0 0 8px">💾 Seus decks salvos</h3>
+     <div class="formgrid"><div><input id="dlSaveName" placeholder="Nome para salvar esta versão"></div><div><button class="primary" id="dlSaveBtn" style="width:100%">Salvar versão</button></div></div>
+     <div id="dlSavedList" style="margin-top:10px"></div>
+    </div>
+   </div>
+   <div class="dl-panel">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+     <h3 style="color:var(--gold);margin:0">🃏 Seu Deck</h3>
+     <div class="dl-count" id="dlTotalCount">Main 0/60 • Extra 0/15 • Side 0/15</div>
+    </div>
+    <div class="dl-deck-tabs">
+     <button class="btn active" data-dl-section="main">Main Deck <span id="dlMainCount">0</span></button>
+     <button class="btn" data-dl-section="extra">Extra Deck <span id="dlExtraCount">0</span></button>
+     <button class="btn" data-dl-section="side">Side Deck <span id="dlSideCount">0</span></button>
+    </div>
+    <div id="dlDeckCards" class="dl-card-list"></div>
+    <div class="dl-toolbar">
+     <button class="btn" id="dlExportBtn">📤 Exportar .ydk</button>
+     <button class="btn" id="dlImportBtn">📥 Importar lista</button>
+     <button class="danger" id="dlClearBtn">🗑️ Limpar deck</button>
+    </div>
+    <div id="dlImportArea" class="hidden" style="margin-top:10px">
+     <textarea id="dlImportText" rows="5" placeholder="Cole aqui uma lista .ydk (IDs das cartas)..."></textarea>
+     <button class="primary" id="dlImportConfirm">Importar lista</button>
+    </div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    <h3 style="color:var(--gold);margin:0 0 5px">📊 Análise de consistência</h3>
+    <p class="dl-hint">Marque as funções de cada carta. Uma carta pode ter várias funções. A simulação usa as cartas físicas do Main Deck, sem contar uma carta duas vezes na mesma mão.</p>
+    <div class="dl-toolbar">
+     <button class="primary" id="dlAnalyzeBtn">🎲 Simular 10.000 mãos</button>
+     <select id="dlHandSize" style="max-width:120px"><option value="5">Mão de 5</option><option value="6">Mão de 6</option></select>
+    </div>
+    <div id="dlAnalysis" class="dl-stat-grid"><div class="dl-stat"><small>Resultado</small><strong>—</strong><small>Adicione cartas e marque suas funções.</small></div></div>
+   </div>
+  </div>
+ </section>
 
  <section id="view-admin" class="hidden">
   <div class="panel">
@@ -765,40 +834,6 @@ function compareSelectedPlayers(){
  const rate=(id,arr)=>arr.length?Math.round(arr.filter(m=>m.winner_id===id).length/arr.length*100):0;
  $("statsComparison").innerHTML=`<div class="panel" style="margin-top:12px"><h3 style="color:var(--gold)">⚔️ ${esc(pA.display_name)} vs ${esc(pB.display_name)}</h3><div class="formgrid"><div class="stat-card"><span>${esc(pA.display_name)}</span><strong>${rate(idA,allA)}%</strong><small class="muted">${allA.filter(m=>m.winner_id===idA).length} vitórias em ${allA.length} duelos</small></div><div class="stat-card"><span>${esc(pB.display_name)}</span><strong>${rate(idB,allB)}%</strong><small class="muted">${allB.filter(m=>m.winner_id===idB).length} vitórias em ${allB.length} duelos</small></div></div><div class="notice" style="margin-top:12px">Confronto direto: <strong>${wA} × ${wB}</strong> em ${h2h.length} duelos${h2h.length<3?' • Amostra pequena':''}</div></div>`;
 }
-
-// Laboratório de Decks: categorias exclusivas e cálculo hipergeométrico exato
-const DL_CATS=[["starter","Starters",12],["handtrap","Hand traps",11],["extender","Extenders",9],["brick","Bricks",4],["breaker","Board breakers",0],["other","Outras cartas",4]],DL_KEY="duelRankingDeckLab";
-function dlInit(){const el=$("dl-counts");if(!el)return;el.innerHTML=DL_CATS.map(([id,n,v])=>`<div class="dl-result"><label for="dl-${id}" style="flex:1;margin:0">${n}</label><input id="dl-${id}" type="number" min="0" max="60" value="${v}" style="max-width:90px" oninput="dlCalc(false)"></div>`).join("");dlCalc(false);dlRender();}
-function dlConfig(){return {size:+$("dl-size").value,hand:+$("dl-hand").value,cats:Object.fromEntries(DL_CATS.map(([id])=>[id,+$("dl-"+id).value||0]))};}
-function dlChoose(n,k){if(k<0||k>n)return 0;k=Math.min(k,n-k);let r=1;for(let i=1;i<=k;i++)r=r*(n-k+i)/i;return r;}
-function dlProb(n,k,h,N){let sum=0;for(let i=k;i<=Math.min(n,h);i++)sum+=dlChoose(n,i)*dlChoose(N-n,h-i);return sum/dlChoose(N,h);}
-function dlJoint(a,b,h,N){let sum=0;for(let i=1;i<=a;i++)for(let j=1;j<=b;j++)if(i+j<=h)sum+=dlChoose(a,i)*dlChoose(b,j)*dlChoose(N-a-b,h-i-j);return sum/dlChoose(N,h);}
-function dlCalc(){let c=dlConfig(),total=Object.values(c.cats).reduce((a,b)=>a+b,0),error=!Number.isInteger(c.size)||c.size<1||c.size>60?"Deck deve ter entre 1 e 60 cartas.":!Number.isInteger(c.hand)||c.hand<1||c.hand>c.size?"Mão inicial inválida.":total!==c.size?`As categorias somam ${total}; o deck tem ${c.size} cartas.`:"";if(error){$("dl-msg").textContent=error;$("dl-msg").className="notice error";$("dl-results").textContent="Corrija a composição.";return null;} $("dl-msg").textContent=`${total}/${c.size} cartas configuradas.`;$("dl-msg").className="notice success";let p=id=>dlProb(c.cats[id],1,c.hand,c.size),j=(a,b)=>dlJoint(c.cats[a],c.cats[b],c.hand,c.size),rows=[["Pelo menos 1 Starter",p("starter")],["2 ou mais Starters",dlProb(c.cats.starter,2,c.hand,c.size)],["Nenhum Starter",1-p("starter")],["Pelo menos 1 Hand Trap",p("handtrap")],["Pelo menos 1 Extender",p("extender")],["Pelo menos 1 Board Breaker",p("breaker")],["Pelo menos 1 Brick",p("brick")],["Starter + Extender",j("starter","extender")],["Starter + Hand Trap",j("starter","handtrap")],["Starter + Board Breaker",j("starter","breaker")],["Brick sem Starter",p("brick")-j("brick","starter")]];window.dlLast={c,rows};$("dl-summary").innerHTML=`<div class="dl-kpi"><b>${c.size}</b><small>Cartas</small></div><div class="dl-kpi"><b>${c.hand}</b><small>Mão inicial</small></div>`+DL_CATS.map(([id,n])=>`<div class="dl-kpi"><b>${c.cats[id]}</b><small>${n}</small></div>`).join("");$("dl-results").innerHTML=rows.map(([n,v])=>`<div class="dl-result"><span>${n}</span><b>${(v*100).toFixed(2)}%</b></div>`).join("")+'<p class="noticebar">Cálculo hipergeométrico exato, sem reposição. Nesta versão, as categorias são exclusivas: uma carta deve ser contada em apenas uma categoria.</p>';return window.dlLast;}
-window.dlReset=()=>{ $("dl-size").value=40;$("dl-hand").value=5;dlInit();$("dl-sim").textContent="Nenhuma simulação realizada.";};
-window.dlSim=()=>{let d=dlCalc();if(!d)return;let {c}=d,n=+$("dl-runs").value,deck=[];DL_CATS.forEach(([id])=>{for(let i=0;i<c.cats[id];i++)deck.push(id);});let hits=Object.fromEntries(DL_CATS.map(([id])=>[id,0]));for(let t=0;t<n;t++){let a=deck.slice();for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}let h=a.slice(0,c.hand);DL_CATS.forEach(([id])=>{if(h.includes(id))hits[id]++;});} $("dl-sim").innerHTML=DL_CATS.map(([id,name])=>`<div class="dl-result"><span>${name}</span><b>${(hits[id]/n*100).toFixed(2)}%</b></div>`).join("");};
-function dlVersions(){try{return JSON.parse(localStorage.getItem(DL_KEY)||"[]");}catch(e){return [];}}
-function dlRender(){let el=$("dl-versions");if(!el)return;let v=dlVersions();el.innerHTML=v.length?v.map(x=>`<div class="dl-result"><label><input type="checkbox" class="dl-check" value="${x.id}" style="width:auto"> ${String(x.name).replace(/[&<>"]/g,"")} (${x.config.size})</label><button onclick="dlLoad(${x.id})">Carregar</button><button onclick="dlDelete(${x.id})">Excluir</button></div>`).join(""):'<div class="empty">Nenhuma versão salva.</div>';}
-window.dlSave=()=>{let d=dlCalc();if(!d)return;let v=dlVersions();v.unshift({id:Date.now(),name:$("dl-name").value.trim()||"Minha construção",config:d.c});localStorage.setItem(DL_KEY,JSON.stringify(v.slice(0,20)));$("dl-name").value="";dlRender();};
-window.dlLoad=id=>{let x=dlVersions().find(v=>v.id===id);if(!x)return;$("dl-size").value=x.config.size;$("dl-hand").value=x.config.hand;DL_CATS.forEach(([k])=>$("dl-"+k).value=x.config.cats[k]);dlCalc();};
-window.dlDelete=id=>{localStorage.setItem(DL_KEY,JSON.stringify(dlVersions().filter(v=>v.id!==id)));dlRender();};
-window.dlCompare=()=>{let ids=[...document.querySelectorAll(".dl-check:checked")].slice(0,3).map(x=>+x.value),v=ids.map(id=>dlVersions().find(x=>x.id===id)).filter(Boolean);if(v.length<2){$("dl-compare").innerHTML='<div class="notice error">Selecione duas ou três versões.</div>';return;}let m=v.map(x=>({name:x.name,s:dlProb(x.config.cats.starter,1,x.config.hand,x.config.size),h:dlProb(x.config.cats.handtrap,1,x.config.hand,x.config.size),b:dlProb(x.config.cats.breaker,1,x.config.hand,x.config.size),r:dlProb(x.config.cats.brick,1,x.config.hand,x.config.size)}));$("dl-compare").innerHTML=`<div class="tablewrap"><table><thead><tr><th>Métrica</th>${m.map(x=>`<th>${x.name}</th>`).join("")}</tr></thead><tbody>${[["s","Starter"],["h","Hand Trap"],["b","Board Breaker"],["r","Brick"]].map(([k,n])=>`<tr><td>${n}</td>${m.map(x=>`<td>${(x[k]*100).toFixed(2)}%</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;};
-
-
-window.dlTestChange=()=>{
- const before=dlCalc();if(!before)return;
- const cat=prompt("Qual categoria deseja alterar? starter, handtrap, extender, brick, breaker ou other");
- if(!cat||!DL_CATS.some(x=>x[0]===cat.trim()))return alert("Categoria inválida.");
- const delta=Number(prompt("Quantas cópias deseja adicionar ou retirar? Ex.: 2 ou -2"));
- if(!Number.isInteger(delta)||!delta)return;
- const offset=prompt("De qual categoria deseja retirar/adicionar a mesma quantidade para manter o tamanho do deck? "+DL_CATS.filter(x=>x[0]!==cat.trim()).map(x=>x[0]).join(", "));
- if(!offset||!DL_CATS.some(x=>x[0]===offset.trim()&&x[0]!==cat.trim()))return alert("Categoria de compensação inválida.");
- const oldA=+$("dl-"+cat.trim()).value,oldB=+$("dl-"+offset.trim()).value;
- $("dl-"+cat.trim()).value=oldA+delta;$("dl-"+offset.trim()).value=oldB-delta;
- const after=dlCalc();if(!after){$("dl-"+cat.trim()).value=oldA;$("dl-"+offset.trim()).value=oldB;dlCalc();return alert("Alteração inválida: a quantidade não pode ficar negativa.");}
- const fmt=x=>(x*100).toFixed(2)+"%";
- $("dl-compare").innerHTML='<h3 style="color:var(--gold)">Teste de alteração</h3>'+before.rows.map((r,i)=>`<div class="dl-result"><span>${r[0]}</span><b>${fmt(r[1])} → ${fmt(after.rows[i][1])}</b></div>`).join("");
-};
-
 const PUSH_VAPID_PUBLIC_KEY = "BMKN_deXW94tjkcpqAbixwmB_XAiSN3j6PS_6C9a7_-Ew02Fmrx3vZ2Ut-QTNFB-zd6rgPLef0vSuQ3jkEUW6jQ";
 function urlBase64ToUint8Array(base64String){
  const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -2241,6 +2276,106 @@ document.addEventListener("keydown",e=>{
  if(key==="?"){e.preventDefault();showShortcuts();return;}
  if(key==="/"){e.preventDefault();const target=activeTab==="partidas"?$("matchSearch"):$("rankSearch");if(target){setTab(activeTab==="partidas"?"partidas":"ranking");target.focus();}}
 });
+
+/* ===== Laboratório de Decks / Construtor ===== */
+(function(){
+ const KEY="duelRankingDeckLab_v1";
+ let deck=[], saved=[], activeSection="main", searchTimer=null, searchToken=0;
+ const roles=["Starter","Extender","Hand Trap","Board Breaker","Brick"];
+ const $d=id=>document.getElementById(id);
+ const safe=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ function persist(){try{localStorage.setItem(KEY,JSON.stringify({deck,saved,name:$d("dlDeckName")?.value||""}));}catch(e){console.warn("Falha ao salvar Laboratório",e);}}
+ function loadLocal(){try{const x=JSON.parse(localStorage.getItem(KEY)||"{}");deck=Array.isArray(x.deck)?x.deck:[];saved=Array.isArray(x.saved)?x.saved:[];if($d("dlDeckName"))$d("dlDeckName").value=x.name||"";}catch(e){deck=[];saved=[];}}
+ function count(sec){return deck.filter(c=>c.section===sec).length;}
+ function renderDeck(){
+  const list=$d("dlDeckCards");if(!list)return;
+  const items=deck.filter(c=>c.section===activeSection);
+  list.innerHTML=items.length?items.map(c=>`<div class="dl-card"><button class="dl-remove" title="Remover" onclick="dlRemove('${c.uid}')">×</button><img src="${safe(c.image)}" alt="${safe(c.name)}" loading="lazy"><strong>${safe(c.name)}</strong><div class="dl-role-row">${roles.map(r=>`<button class="btn dl-role" style="${(c.roles||[]).includes(r)?'border-color:var(--gold);color:var(--gold)':''}" onclick="dlRole('${c.uid}','${r}')">${r}</button>`).join("")}</div></div>`).join(""):`<div class="muted" style="grid-column:1/-1;text-align:center;padding:24px">Nenhuma carta nesta seção ainda.</div>`;
+  ["main","extra","side"].forEach(sec=>{$d("dl"+sec[0].toUpperCase()+sec.slice(1)+"Count").textContent=count(sec);});
+  $d("dlTotalCount").textContent=`Main ${count("main")}/60 • Extra ${count("extra")}/15 • Side ${count("side")}/15`;
+  document.querySelectorAll("[data-dl-section]").forEach(b=>b.classList.toggle("active",b.dataset.dlSection===activeSection));
+  renderSaved();persist();
+ }
+ function renderSaved(){
+  const el=$d("dlSavedList");if(!el)return;
+  el.innerHTML=saved.length?saved.map((x,i)=>`<div class="deck-card-item"><div><strong>${safe(x.name)}</strong><small class="muted" style="display:block">${x.deck.length} cartas • ${new Date(x.date).toLocaleDateString("pt-BR")}</small></div><div style="display:flex;gap:5px"><button class="btn" onclick="dlLoadSaved(${i})">Abrir</button><button class="danger" onclick="dlDeleteSaved(${i})">×</button></div></div>`).join(""):'<p class="muted" style="font-size:12px">Nenhuma versão salva neste navegador.</p>';
+ }
+ function addCard(card){
+  const sec=$d("dlTarget").value, limit=sec==="main"?60:15;
+  if(count(sec)>=limit)return msg(`Limite de ${limit} cartas atingido em ${sec}.`,"error");
+  const copies=deck.filter(c=>c.id===card.id).length;
+  if(copies>=3)return msg("Você já adicionou 3 cópias desta carta.","error");
+  deck.push({uid:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,7),id:card.id,name:card.name,type:card.type||"",desc:card.desc||"",image:card.image,section:sec,roles:[]});
+  activeSection=sec;renderDeck();msg(`${card.name} adicionada ao ${sec==="main"?"Main Deck":sec==="extra"?"Extra Deck":"Side Deck"}.`,"success");
+ }
+ async function searchCards(q){
+  const status=$d("dlSearchStatus"),results=$d("dlSearchResults"),token=++searchToken;
+  if(!q.trim()){status.textContent="Digite para pesquisar cartas.";results.innerHTML="";return;}
+  status.textContent="Pesquisando cartas...";results.innerHTML="";
+  try{
+   const url="https://db.ygoprodeck.com/api/v7/cardinfo.php?fname="+encodeURIComponent(q.trim())+"&misc=yes";
+   const res=await fetch(url);if(!res.ok)throw new Error("Não foi possível consultar a base de cartas.");
+   const data=await res.json();if(token!==searchToken)return;
+   const cards=(data.data||[]).slice(0,30);
+   if(!cards.length){status.textContent="Nenhuma carta encontrada. Tente outro nome.";return;}
+   status.textContent=`${cards.length} resultado(s). Toque para adicionar.`;
+   results.innerHTML=cards.map(c=>{const img=c.card_images?.[0]?.image_url_small||c.card_images?.[0]?.image_url||"";const payload=encodeURIComponent(JSON.stringify({id:c.id,name:c.name,type:c.type,desc:(c.desc||"").slice(0,500),image:img})).replace(/'/g,"%27");return `<div class="dl-result"><img src="${safe(img)}" alt="${safe(c.name)}" loading="lazy"><strong>${safe(c.name)}</strong><button class="primary" onclick="dlAddCard(JSON.parse(decodeURIComponent('${payload}')))">＋ Adicionar</button></div>`;}).join("");
+  }catch(e){if(token!==searchToken)return;status.textContent="Erro ao pesquisar. Verifique sua conexão e tente novamente.";console.warn(e);}
+ }
+ function analyze(){
+  const main=deck.filter(c=>c.section==="main"),handSize=Number($d("dlHandSize").value);
+  if(main.length<handSize){$d("dlAnalysis").innerHTML='<div class="notice">Adicione cartas suficientes ao Main Deck para simular.</div>';return;}
+  const rolesToCheck=roles.filter(r=>main.some(c=>(c.roles||[]).includes(r)));
+  if(!rolesToCheck.length){$d("dlAnalysis").innerHTML='<div class="notice">Marque as funções das cartas no deck antes de analisar.</div>';return;}
+  const trials=10000, hits=Object.fromEntries(rolesToCheck.map(r=>[r,0])), pairs={starterExtender:0,starterHandTrap:0,brickNoStarter:0};
+  for(let n=0;n<trials;n++){
+   const pool=main.slice(),hand=[];
+   for(let j=0;j<handSize;j++){const k=Math.floor(Math.random()*pool.length);hand.push(pool.splice(k,1)[0]);}
+   const has=r=>hand.some(c=>(c.roles||[]).includes(r));
+   rolesToCheck.forEach(r=>{if(has(r))hits[r]++;});
+   if(has("Starter")&&has("Extender"))pairs.starterExtender++;
+   if(has("Starter")&&has("Hand Trap"))pairs.starterHandTrap++;
+   if(has("Brick")&&!has("Starter"))pairs.brickNoStarter++;
+  }
+  const pct=n=>(n/trials*100).toFixed(2).replace(".",",")+"%";
+  $d("dlAnalysis").innerHTML=rolesToCheck.map(r=>`<div class="dl-stat"><small>Chance de abrir ${r}</small><strong>${pct(hits[r])}</strong><small>${hits[r].toLocaleString("pt-BR")} / ${trials.toLocaleString("pt-BR")} mãos</small></div>`).join("")+
+   `<div class="dl-stat"><small>Starter + Extender</small><strong>${pct(pairs.starterExtender)}</strong></div><div class="dl-stat"><small>Starter + Hand Trap</small><strong>${pct(pairs.starterHandTrap)}</strong></div><div class="dl-stat"><small>Brick sem Starter</small><strong>${pct(pairs.brickNoStarter)}</strong></div><div class="dl-stat"><small>Amostra</small><strong>${trials.toLocaleString("pt-BR")}</strong><small>Main ${main.length} • mão ${handSize}</small></div>`;
+ }
+ window.dlAddCard=addCard;
+ window.dlRemove=uid=>{deck=deck.filter(c=>c.uid!==uid);renderDeck();};
+ window.dlRole=(uid,role)=>{const c=deck.find(x=>x.uid===uid);if(!c)return;c.roles=c.roles||[];c.roles=c.roles.includes(role)?c.roles.filter(x=>x!==role):[...c.roles,role];renderDeck();};
+ window.dlLoadSaved=i=>{const x=saved[i];if(!x)return;deck=JSON.parse(JSON.stringify(x.deck));$d("dlDeckName").value=x.name;activeSection="main";renderDeck();msg("Versão carregada.","success");};
+ window.dlDeleteSaved=i=>{if(!confirm("Apagar esta versão salva?"))return;saved.splice(i,1);renderSaved();persist();};
+ function init(){
+  if(!$d("view-decklab"))return;loadLocal();
+  $d("dlSearch").addEventListener("input",e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchCards(e.target.value),400);});
+  $d("dlDeckName").addEventListener("input",persist);
+  document.querySelectorAll("[data-dl-section]").forEach(b=>b.addEventListener("click",()=>{activeSection=b.dataset.dlSection;renderDeck();}));
+  $d("dlSaveBtn").onclick=()=>{if(!deck.length)return msg("Adicione cartas antes de salvar.","error");const name=$d("dlSaveName").value.trim()||$d("dlDeckName").value.trim()||"Meu Deck";saved.unshift({name,deck:JSON.parse(JSON.stringify(deck)),date:new Date().toISOString()});saved=saved.slice(0,30);$d("dlSaveName").value="";renderSaved();persist();msg("Versão salva neste navegador.","success");};
+  $d("dlAnalyzeBtn").onclick=analyze;
+  $d("dlClearBtn").onclick=()=>{if(!confirm("Remover todas as cartas deste deck?"))return;deck=[];renderDeck();$d("dlAnalysis").innerHTML="";};
+  $d("dlExportBtn").onclick=()=>{const lines=["#created by Duel Ranking","", "#main",...deck.filter(c=>c.section==="main").map(c=>c.id),"", "#extra",...deck.filter(c=>c.section==="extra").map(c=>c.id),"", "!side",...deck.filter(c=>c.section==="side").map(c=>c.id)];const blob=new Blob([lines.join("\n")],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=($d("dlDeckName").value.trim()||"deck").replace(/[^a-z0-9_-]/gi,"_")+".ydk";a.click();URL.revokeObjectURL(a.href);};
+  $d("dlImportBtn").onclick=()=>$d("dlImportArea").classList.toggle("hidden");
+  $d("dlImportConfirm").onclick=async()=>{
+   const raw=$d("dlImportText").value.split(/\r?\n/);let sec="main";const wanted={main:[],extra:[],side:[]};
+   raw.forEach(line=>{const t=line.trim();if(!t) return;if(t.toLowerCase()==="#main"){sec="main";return;}if(t.toLowerCase()==="#extra"){sec="extra";return;}if(t.toLowerCase()==="!side"){sec="side";return;}if(/^\d{5,10}$/.test(t))wanted[sec].push(t);});
+   const ids=[...new Set([...wanted.main,...wanted.extra,...wanted.side])];if(!ids.length)return msg("Não encontrei IDs de cartas na lista .ydk.","error");
+   $d("dlImportConfirm").disabled=true;
+   try{
+    const byId={};
+    for(let i=0;i<ids.length;i+=20){const chunk=ids.slice(i,i+20);const r=await fetch("https://db.ygoprodeck.com/api/v7/cardinfo.php?id="+chunk.join(","));if(!r.ok)continue;const j=await r.json();(j.data||[]).forEach(c=>byId[String(c.id)]=c);}
+    const imported=[];
+    ["main","extra","side"].forEach(section=>{const copies={};wanted[section].forEach(id=>{copies[id]=(copies[id]||0)+1;});Object.entries(copies).forEach(([id,n])=>{const c=byId[id];if(!c)return;const img=c.card_images?.[0]?.image_url_small||c.card_images?.[0]?.image_url||"";for(let k=0;k<Math.min(n,3);k++)imported.push({uid:"i"+Math.random().toString(36).slice(2),id:c.id,name:c.name,type:c.type||"",desc:c.desc||"",image:img,section,roles:[]});});});
+    deck=imported.filter((c)=>{const max=c.section==="main"?60:15;const n=imported.slice(0,imported.indexOf(c)+1).filter(x=>x.section===c.section).length;return n<=max;});
+    activeSection="main";renderDeck();msg(`${deck.length} cartas importadas. Main, Extra e Side foram separados conforme o arquivo .ydk.`,"success");
+   }catch(e){msg("Falha ao importar a lista. Verifique sua conexão.","error");}
+   finally{$d("dlImportConfirm").disabled=false;}
+  };
+  renderDeck();
+ }
+ window.dlInit=init;
+})();
+
 $("loginBtn").onclick=()=>window.openAuth();$("logoutBtn").onclick=async()=>{await sb?.auth.signOut();msg("Você saiu da conta.");await loadData()};$("reportBtn").onclick=window.openReport;$("reportHero").onclick=window.openReport;$("rankSearch").addEventListener("input",renderRanking);
 $("matchSearch")?.addEventListener("input",renderMatches);
 $("matchStatusFilter")?.addEventListener("change",renderMatches);
@@ -2256,7 +2391,7 @@ $("comparePlayersBtn")?.addEventListener("click",compareSelectedPlayers);
 if(!configured){msg("Modo de configuração: conecte as credenciais do Supabase para ativar o ranking online.","error")}
 if(configured)sb.auth.onAuthStateChange(()=>setTimeout(loadData,0));
 loadData();
-dlInit();
+window.dlInit?.();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
